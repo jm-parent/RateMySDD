@@ -1,0 +1,46 @@
+{
+  "pillars": [
+    {
+      "pillarId": "01",
+      "score": 90,
+      "summary": ["Le problème et la valeur métier sont identifiés.", "Des indicateurs de succès sont prévus."],
+      "description": "Le problème et la valeur attendue sont clairement décrits. Le besoin est justifié par la réduction des demandes manuelles et l’amélioration du taux de souscription.",
+      "improvements": ["Préciser la source de référence du taux de succès."]
+    },
+    {
+      "pillarId": "02",
+      "score": 85,
+      "summary": ["Les utilisateurs et exclusions sont identifiés.", "Le périmètre fonctionnel est délimité."],
+      "description": "Les utilisateurs et les exclusions de périmètre sont identifiés.",
+      "improvements": ["Décrire les règles de priorité entre les besoins."]
+    },
+    {
+      "pillarId": "03",
+      "score": 88,
+      "summary": ["Les comportements principaux sont définis.", "Plusieurs règles métier sont précisées."],
+      "description": "Les comportements principaux et plusieurs règles métier sont définis.",
+      "improvements": ["Préciser les règles applicables aux changements d'offre."]
+    },
+    {
+      "pillarId": "04",
+      "score": 82,
+      "summary": ["Les données principales sont documentées.", "Les intégrations nécessaires sont identifiées."],
+      "description": "Les données et les intégrations principales sont documentées.",
+      "improvements": ["Définir la durée de conservation des événements de paiement."]
+    },
+    {
+      "pillarId": "05",
+      "score": 91,
+      "summary": ["Les scénarios nominaux sont observables.", "Les principaux scénarios d’échec sont couverts."],
+      "description": "Les scénarios nominaux et d'échec sont observables.",
+      "improvements": ["Ajouter un scénario de webhook invalide."]
+    },
+    {
+      "pillarId": "06",
+      "score": 87,
+      "summary": ["La performance et la sécurité sont précisées.", "La disponibilité cible est documentée."],
+      "description": "La performance, la sécurité et la disponibilité sont précisées.",
+      "improvements": ["Décrire le plan de reprise après incident."]
+    }
+  ]
+}

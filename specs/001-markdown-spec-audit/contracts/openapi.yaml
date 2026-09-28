@@ -1,0 +1,243 @@
+openapi: 3.1.0
+info:
+  title: RateMySDD — API locale
+  version: 1.0.0
+  description: >
+    API HTTP exposée par le serveur local (127.0.0.1 uniquement) à l'interface web.
+    Toutes les routes /api/* hors /api/session et /api/auth/device/* exigent une session
+    authentifiée (cookie HttpOnly `rmsdd_sid`). Toutes les requêtes non-GET exigent l'en-tête
+    `Origin` égal à l'origine de l'application (anti-CSRF). Aucun contenu de document n'est
+    stocké ni journalisé.
+servers:
+  - url: http://127.0.0.1:5178
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: rmsdd_sid
+  headers:
+    SessionExpiresAt:
+      description: >
+        Échéance absolue de la session authentifiée en UTC, au format RFC 3339.
+        Présente uniquement lorsque la réponse correspond à une session valide.
+      schema:
+        type: string
+        format: date-time
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - UNAUTHENTICATED        # 401 — pas de session valide
+        - NO_COPILOT_ACCESS      # 403 — compte sans abonnement Copilot actif
+        - FORBIDDEN_ORIGIN       # 403 — Origin/Host invalide
+        - EMPTY_CONTENT          # 400 — FR-008
+        - INVALID_FILE_TYPE      # 400 — FR-007 (extension ≠ .md)
+        - INVALID_ENCODING       # 400 — FR-007 (UTF-8 invalide / binaire)
+        - CONTENT_TOO_LARGE      # 413 — FR-007 (> 204 800 octets)
+        - AUDIT_IN_PROGRESS      # 409 — FR-016
+        - AI_OUTPUT_INVALID      # 502 — FR-015 (2 réponses non conformes)
+        - COPILOT_RATE_LIMITED   # 429 — quota/limite atteint
+        - COPILOT_UNAVAILABLE    # 503 — service indisponible
+        - COPILOT_TIMEOUT        # 504 — délai dépassé
+        - DEVICE_FLOW_ERROR      # 502 — erreur GitHub pendant la connexion
+        - INTERNAL_ERROR         # 500
+    ApiError:
+      type: object
+      required: [code, message]
+      additionalProperties: false
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message:
+          type: string
+          description: Message en français, sans détail technique interne (FR-023)
+    User:
+      type: object
+      required: [login, name, avatarUrl, copilotAccess]
+      properties:
+        login: { type: string }
+        name: { type: [string, 'null'] }
+        avatarUrl: { type: [string, 'null'], format: uri }
+        copilotAccess: { type: string, enum: [active, none] }
+    SessionState:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated: { type: boolean }
+        user: { $ref: '#/components/schemas/User' }
+    DeviceStart:
+      type: object
+      required: [userCode, verificationUri, expiresIn, interval]
+      properties:
+        userCode: { type: string, example: 'ABCD-1234' }
+        verificationUri: { type: string, format: uri, example: 'https://github.com/login/device' }
+        expiresIn: { type: integer, description: secondes }
+        interval: { type: integer, description: secondes minimales entre deux polls }
+    DevicePoll:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [pending, slow_down, authorized, denied, expired] }
+        interval: { type: integer }
+        user: { $ref: '#/components/schemas/User' }
+    AuditRequest:
+      type: object
+      required: [content, source]
+      additionalProperties: false
+      properties:
+        content: { type: string, description: 'Markdown principal ; non vide ; ≤ 204 800 octets UTF-8' }
+        source: { type: string, enum: [paste, file] }
+        documentType: { type: string, enum: [spec, plan, tasks], default: spec }
+        referenceContent:
+          type: string
+          description: Requis pour plan/tasks ; Markdown de référence, ≤ 204 800 octets UTF-8
+        fileName:
+          type: [string, 'null']
+          maxLength: 255
+          pattern: '(?i)\.md$'
+          description: Requis si source = file
+      allOf:
+        - if:
+            properties:
+              documentType: { enum: [plan, tasks] }
+            required: [documentType]
+          then:
+            required: [referenceContent]
+    CriterionEvaluation:
+      type: object
+      required: [criterionId, title, score, band, summary, description, improvements]
+      additionalProperties: false
+      properties:
+        criterionId: { type: string, enum: ['01', '02', '03', '04', '05', '06'] }
+        title: { type: string }
+        score: { type: integer, minimum: 0, maximum: 100 }
+        band:
+          type: string
+          enum: [absent, très insuffisant, insuffisant, acceptable, bon, excellent]
+        summary:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { type: string, minLength: 1, maxLength: 180 }
+        description: { type: string, minLength: 1 }
+        improvements:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1 }
+    AuditResult:
+      type: object
+      required: [auditedAt, documentName, documentType, source, globalScore, globalBand, evaluations, model]
+      additionalProperties: false
+      properties:
+        auditedAt: { type: string, format: date-time }
+        documentName: { type: string, description: 'Nom du fichier sans extension, ou « Texte collé »' }
+        documentType: { type: string, enum: [spec, plan, tasks] }
+        source: { type: string, enum: [paste, file] }
+        fileName: { type: [string, 'null'] }
+        globalScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Math.round(moyenne des 6 scores), calculé par le serveur (FR-017a)
+        globalBand: { type: string }
+        evaluations:
+          type: array
+          minItems: 6
+          maxItems: 6
+          items: { $ref: '#/components/schemas/CriterionEvaluation' }
+        model: { type: string }
+  responses:
+    Error:
+      description: Erreur normalisée
+      headers:
+        X-Session-Expires-At:
+          $ref: '#/components/headers/SessionExpiresAt'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+paths:
+  /api/session:
+    get:
+      summary: État de la session courante
+      responses:
+        '200':
+          description: >
+            État de session ; l'en-tête d'échéance n'est présent que si
+            authenticated=true.
+          headers:
+            X-Session-Expires-At:
+              $ref: '#/components/headers/SessionExpiresAt'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionState' }
+  /api/auth/device/start:
+    post:
+      summary: Démarre le Device Flow OAuth GitHub (FR-001)
+      responses:
+        '200':
+          description: Code à saisir par l'auditeur sur github.com
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceStart' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/auth/device/poll:
+    post:
+      summary: Interroge l'état de l'autorisation ; à l'état authorized, pose le cookie de session
+      responses:
+        '200':
+          description: >
+            État courant ; l'en-tête d'échéance n'est présent que lorsque le statut
+            est authorized.
+          headers:
+            Set-Cookie:
+              description: 'rmsdd_sid=…; HttpOnly; SameSite=Strict; Path=/ (uniquement si authorized)'
+              schema: { type: string }
+            X-Session-Expires-At:
+              $ref: '#/components/headers/SessionExpiresAt'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DevicePoll' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/auth/logout:
+    post:
+      summary: Déconnexion ; invalide la session et efface le jeton (FR-003)
+      security: [{ sessionCookie: [] }]
+      responses:
+        '204':
+          description: Session invalidée, cookie supprimé
+          headers:
+            Set-Cookie:
+              description: Cookie de session supprimé
+              schema: { type: string }
+            X-Session-Expires-At:
+              $ref: '#/components/headers/SessionExpiresAt'
+  /api/audits:
+    post:
+      summary: Lance un audit synchrone du document (FR-010 à FR-020)
+      description: >
+        Le document n'est ni stocké ni journalisé. Une seule requête d'audit à la fois par
+        session. Durée maximale ≈ 2 × 50 s (1 nouvelle tentative si sortie IA non conforme).
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuditRequest' }
+      responses:
+        '200':
+          description: Résultat conforme (6 critères dans l'ordre canonique du type)
+          headers:
+            X-Session-Expires-At:
+              $ref: '#/components/headers/SessionExpiresAt'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditResult' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+        '504': { $ref: '#/components/responses/Error' }

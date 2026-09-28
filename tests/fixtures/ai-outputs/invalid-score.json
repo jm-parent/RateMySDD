@@ -1,0 +1,10 @@
+{
+  "pillars": [
+    { "pillarId": "01", "score": 101, "summary": ["Contexte défini.", "Valeur attendue identifiée."], "description": "Contexte défini.", "improvements": ["Préciser les mesures."] },
+    { "pillarId": "02", "score": 80, "summary": ["Périmètre défini.", "Exclusions identifiées."], "description": "Périmètre défini.", "improvements": ["Préciser les exclusions."] },
+    { "pillarId": "03", "score": 80, "summary": ["Fonctions définies.", "Règles métier présentes."], "description": "Fonctions définies.", "improvements": ["Ajouter des règles."] },
+    { "pillarId": "04", "score": 80, "summary": ["Données définies.", "Intégrations identifiées."], "description": "Données définies.", "improvements": ["Documenter les accès."] },
+    { "pillarId": "05", "score": 80, "summary": ["Critères définis.", "Erreurs à préciser."], "description": "Critères définis.", "improvements": ["Ajouter des erreurs."] },
+    { "pillarId": "06", "score": 80, "summary": ["Exigences définies.", "Disponibilité à préciser."], "description": "Exigences définies.", "improvements": ["Préciser la disponibilité."] }
+  ]
+}
