@@ -24,6 +24,7 @@ describe('parseConfig', () => {
         NODE_ENV: 'production',
         VERCEL_ENV: 'preview',
         VERCEL_URL: 'rate-my-sdd-preview.vercel.app',
+        VERCEL_PROJECT_PRODUCTION_URL: 'rate-my-sdd.vercel.app',
         UPSTASH_REDIS_REST_URL: 'https://redis.example.com',
         UPSTASH_REDIS_REST_TOKEN: 'redis-secret',
         SESSION_ENCRYPTION_KEY: '7b'.repeat(32),
@@ -44,7 +45,7 @@ describe('parseConfig', () => {
     ).toBe('https://rate-my-sdd.vercel.app');
   });
 
-  it('requires the stable canonical origin in production even when VERCEL_URL exists', () => {
+  it('requires a stable canonical origin in production when only VERCEL_URL exists', () => {
     expect(() =>
       parseConfig({
         GITHUB_OAUTH_CLIENT_ID: 'client',
@@ -56,6 +57,21 @@ describe('parseConfig', () => {
         SESSION_ENCRYPTION_KEY: '7b'.repeat(32),
       }),
     ).toThrow(ConfigurationError);
+  });
+
+  it('uses the Vercel production project URL when APP_ORIGIN is unset', () => {
+    expect(
+      parseConfig({
+        GITHUB_OAUTH_CLIENT_ID: 'client',
+        NODE_ENV: 'production',
+        VERCEL_ENV: 'production',
+        VERCEL_URL: 'temporary-deployment.vercel.app',
+        VERCEL_PROJECT_PRODUCTION_URL: 'rate-my-sdd.vercel.app',
+        UPSTASH_REDIS_REST_URL: 'https://redis.example.com',
+        UPSTASH_REDIS_REST_TOKEN: 'redis-secret',
+        SESSION_ENCRYPTION_KEY: '7b'.repeat(32),
+      }).publicOrigin,
+    ).toBe('https://rate-my-sdd.vercel.app');
   });
 
   it('requires shared Redis storage and a 256-bit encryption key in production', () => {

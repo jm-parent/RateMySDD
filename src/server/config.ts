@@ -35,8 +35,17 @@ export function parseConfig(
     env.PORT === undefined || env.PORT.trim() === '' ? undefined : Number(env.PORT);
   const configuredPublicOrigin = env.APP_ORIGIN?.trim();
   const vercelHost = env.VERCEL_URL?.trim().replace(/^https?:\/\//, '');
+  const vercelProductionHost = env.VERCEL_PROJECT_PRODUCTION_URL?.trim().replace(
+    /^https?:\/\//,
+    '',
+  );
   const rawPublicOrigin =
-    configuredPublicOrigin || (vercelHost ? `https://${vercelHost}` : undefined);
+    configuredPublicOrigin ||
+    (env.VERCEL_ENV === 'production' && vercelProductionHost
+      ? `https://${vercelProductionHost}`
+      : vercelHost
+        ? `https://${vercelHost}`
+        : undefined);
   const redisRestUrl = env.UPSTASH_REDIS_REST_URL?.trim() || undefined;
   const redisRestToken = env.UPSTASH_REDIS_REST_TOKEN?.trim() || undefined;
   const sessionEncryptionKey = env.SESSION_ENCRYPTION_KEY?.trim() || undefined;
@@ -54,16 +63,17 @@ export function parseConfig(
   if (
     env.NODE_ENV === 'production' &&
     env.VERCEL_ENV === 'production' &&
-    !configuredPublicOrigin
+    !configuredPublicOrigin &&
+    !vercelProductionHost
   ) {
     throw new ConfigurationError(
-      'Configuration invalide. Vérifiez le paramètre : APP_ORIGIN.',
+      'Configuration invalide. Vérifiez APP_ORIGIN ou VERCEL_PROJECT_PRODUCTION_URL.',
     );
   }
 
   if (env.NODE_ENV === 'production' && !rawPublicOrigin) {
     throw new ConfigurationError(
-      'Configuration invalide. Vérifiez les paramètres : APP_ORIGIN ou VERCEL_URL.',
+      'Configuration invalide. Vérifiez APP_ORIGIN, VERCEL_PROJECT_PRODUCTION_URL ou VERCEL_URL.',
     );
   }
 
