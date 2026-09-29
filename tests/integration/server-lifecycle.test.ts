@@ -10,6 +10,7 @@ import { buildApp } from '../../src/server/app.js';
 import { SessionStore } from '../../src/server/auth/session-store.js';
 import { parseConfig } from '../../src/server/config.js';
 import { DiagnosticSnapshotSchema } from '../../src/shared/schemas.js';
+import { AppError } from '../../src/server/errors.js';
 import { createTestDependencies } from '../../src/server/testing/test-mode.js';
 import {
   createServerRuntime,
@@ -148,6 +149,61 @@ describe('server lifecycle', () => {
       });
       expect(logLines.join('')).toContain('diagnostic-test-id');
       expect(logLines.join('')).not.toContain('sensitive exception detail');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('shows a sanitized Copilot availability cause only in the admin event', async () => {
+    const logLines: string[] = [];
+    const logStream = new Writable({
+      write(chunk, _encoding, callback) {
+        logLines.push(chunk.toString());
+        callback();
+      },
+    });
+    const redisToken = 'redis-secret-from-provider-error';
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', redisToken);
+    const { engine, deviceFlow } = createTestDependencies();
+    const app = await buildApp({
+      config: testConfig(await temporaryDirectory()),
+      engine,
+      deviceFlow,
+      sessionStore: new SessionStore((token) => engine.release(token)),
+      logStream,
+    });
+
+    app.get('/api/test-copilot-failure', async () => {
+      throw new AppError('COPILOT_UNAVAILABLE', {
+        cause: new Error(`Copilot runtime startup failed: ${redisToken}`),
+      });
+    });
+
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/test-copilot-failure',
+        headers: {
+          host: '127.0.0.1:5178',
+          'x-diagnostic-id': 'copilot-diagnostic-id',
+        },
+      });
+      const event = getDiagnosticEvents().at(-1);
+
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({
+        code: 'COPILOT_UNAVAILABLE',
+        message: 'Le service Copilot est momentanément indisponible.',
+      });
+      expect(JSON.stringify(response.json())).not.toContain('Copilot runtime startup failed');
+      expect(event).toMatchObject({
+        requestId: 'copilot-diagnostic-id',
+        source: 'request',
+        errorType: 'AppError',
+        message: 'Error: Copilot runtime startup failed: [redacted]',
+      });
+      expect(logLines.join('')).toContain('Copilot runtime startup failed: [redacted]');
+      expect(logLines.join('')).not.toContain(redisToken);
     } finally {
       await app.close();
     }

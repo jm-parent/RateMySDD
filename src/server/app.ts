@@ -5,7 +5,7 @@ import type { Writable } from 'node:stream';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { AppConfig } from './config.js';
-import { STATUS_BY_CODE, toApiError } from './errors.js';
+import { AppError, STATUS_BY_CODE, toApiError } from './errors.js';
 import type { AuditEngine } from './audit/engine.js';
 import type { ApiError } from '../shared/schemas.js';
 import {
@@ -13,6 +13,7 @@ import {
   extractBearerToken,
   isDiagnosticsAuthorized,
   recordDiagnosticEvent,
+  summarizeDiagnosticCause,
 } from './diagnostics.js';
 import { createOriginGuard } from './security/origin-guard.js';
 import type { DeviceFlowClient } from './auth/device-flow.js';
@@ -96,12 +97,20 @@ export async function buildApp({
     const statusCode = code ? STATUS_BY_CODE[code] : STATUS_BY_CODE[publicError.code];
     if (statusCode >= 500) {
       const diagnosticId = request.id.slice(0, 128);
+      const includeCopilotCause =
+        error instanceof AppError && error.code === 'COPILOT_UNAVAILABLE';
       const event = recordDiagnosticEvent({
         timestamp: new Date().toISOString(),
         requestId: diagnosticId,
         source: 'request',
         errorType: error instanceof Error ? error.name : 'UnknownError',
-        message: error instanceof Error ? error.message : 'Erreur serveur.',
+        message: includeCopilotCause
+          ? summarizeDiagnosticCause(error.cause)
+          : error instanceof Error
+            ? error.message
+            : 'Erreur serveur.',
+      }, {
+        includeRequestMessage: includeCopilotCause,
       });
       app.log.error(
         {

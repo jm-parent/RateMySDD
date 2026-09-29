@@ -26,8 +26,15 @@ const GENERIC_ERROR_MESSAGE = 'Une erreur serveur a été détectée.';
 
 const diagnosticEvents: DiagnosticEvent[] = [];
 
-function sanitizeMessage(message: string, source: DiagnosticEvent['source']): string {
-  let sanitized = source === 'startup' ? message : GENERIC_ERROR_MESSAGE;
+function sanitizeMessage(
+  message: string,
+  source: DiagnosticEvent['source'],
+  includeRequestMessage: boolean,
+): string {
+  let sanitized =
+    source === 'startup' || includeRequestMessage
+      ? message
+      : GENERIC_ERROR_MESSAGE;
 
   for (const key of SENSITIVE_ENVIRONMENT_KEYS) {
     const secret = process.env[key]?.trim();
@@ -72,11 +79,41 @@ export function createDiagnosticSnapshot(
   });
 }
 
-export function recordDiagnosticEvent(event: DiagnosticEvent): DiagnosticEvent {
+export function summarizeDiagnosticCause(error: unknown): string {
+  const causes: string[] = [];
+  let current = error;
+  while (current instanceof Error && causes.length < 4) {
+    const candidate = current as Error & {
+      code?: unknown;
+      status?: unknown;
+      statusCode?: unknown;
+    };
+    const metadata = [candidate.code, candidate.status, candidate.statusCode]
+      .filter(
+        (value): value is string | number =>
+          typeof value === 'string' || typeof value === 'number',
+      )
+      .join(' ');
+    causes.push(
+      `${current.name}${metadata ? ` [${metadata}]` : ''}: ${current.message}`,
+    );
+    current = current.cause;
+  }
+  return causes.join(' <- ') || GENERIC_ERROR_MESSAGE;
+}
+
+export function recordDiagnosticEvent(
+  event: DiagnosticEvent,
+  options: { includeRequestMessage?: boolean } = {},
+): DiagnosticEvent {
   const sanitizedEvent = DiagnosticEventSchema.parse({
     ...event,
     errorType: event.errorType.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80) || 'Error',
-    message: sanitizeMessage(event.message, event.source),
+    message: sanitizeMessage(
+      event.message,
+      event.source,
+      options.includeRequestMessage === true,
+    ),
   });
   diagnosticEvents.push(sanitizedEvent);
   if (diagnosticEvents.length > MAX_DIAGNOSTIC_EVENTS) {
