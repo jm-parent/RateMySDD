@@ -5,7 +5,6 @@ import {
   loadConfig,
 } from '../src/server/config.js';
 import { MESSAGE_BY_CODE } from '../src/server/errors.js';
-import { createServerRuntime } from '../src/server/index.js';
 import {
   createDiagnosticSnapshot,
   extractBearerToken,
@@ -13,27 +12,26 @@ import {
   recordDiagnosticEvent,
 } from '../src/server/diagnostics.js';
 
-let runtimePromise: ReturnType<typeof createServerRuntime> | undefined;
+type CreateServerRuntime = typeof import('../src/server/index.js').createServerRuntime;
+
+let runtimePromise: ReturnType<CreateServerRuntime> | undefined;
 let runtimeStatus: 'not_started' | 'starting' | 'ready' | 'failed' = 'not_started';
 
 async function getRuntime() {
   if (!runtimePromise) {
     runtimeStatus = 'starting';
-    try {
-      runtimePromise = createServerRuntime(loadConfig())
-        .then((runtime) => {
-          runtimeStatus = 'ready';
-          return runtime;
-        })
-        .catch((error: unknown) => {
+    runtimePromise = (async () => {
+      try {
+        const { createServerRuntime } = await import('../src/server/index.js');
+        const runtime = await createServerRuntime(loadConfig());
+        runtimeStatus = 'ready';
+        return runtime;
+      } catch (error) {
           runtimeStatus = 'failed';
           runtimePromise = undefined;
           throw error;
-        });
-    } catch (error) {
-      runtimeStatus = 'failed';
-      throw error;
-    }
+      }
+    })();
   }
   return runtimePromise;
 }

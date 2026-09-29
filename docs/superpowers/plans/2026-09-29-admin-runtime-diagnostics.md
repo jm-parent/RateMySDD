@@ -38,6 +38,7 @@
 | `tests/unit/schemas.test.ts`                           | Couvrir le contrat Zod strict du diagnostic et l’identifiant d’erreur facultatif.                                                  |
 | `tests/contract/auth.contract.test.ts`                 | Vérifier que l’OpenAPI accepte le snapshot et les IDs et documente le Bearer admin.                                                |
 | `tests/integration/vercel-api-function.test.ts`        | Couvrir l’accès pré-runtime, l’échec d’initialisation et l’identifiant corrélé.                                                    |
+| `tests/integration/vercel-cold-start.test.ts`          | Vérifier que le diagnostic répond même si le module serveur/Copilot échoue à l’import.                                             |
 | `tests/integration/server-lifecycle.test.ts`           | Couvrir la capture d’une erreur 5xx Fastify avec le même identifiant.                                                              |
 | `tests/unit/auth-components.test.ts`                   | Couvrir le rendu accessible du bouton et du panneau initial.                                                                       |
 | `tests/e2e/admin-diagnostics.spec.ts`                  | Couvrir la saisie du code, le chargement du snapshot et les erreurs UI.                                                            |
@@ -94,6 +95,7 @@ Expected: PASS; aucun secret d’entrée ne figure dans le snapshot ou les évé
 - Modify: `api/[...path].ts`
 - Modify: `src/shared/schemas.ts`
 - Modify: `tests/integration/vercel-api-function.test.ts`
+- Create: `tests/integration/vercel-cold-start.test.ts`
 
 **Interfaces:**
 
@@ -103,14 +105,14 @@ Expected: PASS; aucun secret d’entrée ne figure dans le snapshot ou les évé
 - Une requête non autorisée reçoit une réponse générique sans snapshot.
 - Un échec d’initialisation d’une route ordinaire reçoit un HTTP 500 JSON conforme à `ApiErrorSchema`, un `diagnosticId` et l’en-tête `X-Diagnostic-Id`.
 
-- [ ] **Step 1: Ajouter les tests d’intégration rouges.** Dans `vercel-api-function.test.ts`, tester le diagnostic autorisé sans résolution de `createServerRuntime`, l’absence et l’invalidité du Bearer sans snapshot, puis simuler un rejet de `createServerRuntime` sur `/api/session` et vérifier le 500 structuré, l’identifiant d’événement et l’en-tête `X-Diagnostic-Id`.
+- [ ] **Step 1: Ajouter les tests d’intégration rouges.** Dans `vercel-api-function.test.ts`, tester le diagnostic autorisé sans résolution de `createServerRuntime`, l’absence et l’invalidité du Bearer sans snapshot, puis simuler un rejet de `createServerRuntime` sur `/api/session` et vérifier le 500 structuré, l’identifiant d’événement et l’en-tête `X-Diagnostic-Id`. Dans `vercel-cold-start.test.ts`, faire échouer le chargement du module serveur et vérifier que le diagnostic reste joignable.
 - [ ] **Step 2: Exécuter le test Vercel et confirmer ces échecs.**
 
 Run: `rtk npm test -- tests/integration/vercel-api-function.test.ts`
 
 Expected: FAIL sur le routage diagnostic absent et l’erreur de démarrage actuellement propagée sans réponse normalisée.
 
-- [ ] **Step 3: Intercepter le chemin diagnostic avant `getRuntime()`.** Comparer le Bearer au secret configuré; renvoyer le snapshot uniquement en cas de succès, avec `Cache-Control: no-store`. Retourner la même réponse générique pour jeton absent ou incorrect.
+- [ ] **Step 3: Intercepter le chemin diagnostic avant `getRuntime()` et charger le runtime dynamiquement.** Ne pas importer statiquement `src/server/index.ts`; faire `await import('../src/server/index.js')` uniquement depuis `getRuntime()`. Comparer le Bearer au secret configuré; renvoyer le snapshot uniquement en cas de succès, avec `Cache-Control: no-store`. Retourner la même réponse générique pour jeton absent ou incorrect.
 - [ ] **Step 4: Suivre l’état du runtime et corréler les erreurs de démarrage.** Générer un UUID par requête, le définir dans `X-Diagnostic-Id` et remplacer l’en-tête entrant `x-diagnostic-id` avant le dispatch Fastify. Conserver l’état `starting`/`ready`/`failed`, enregistrer l’échec expurgé et écrire un événement JSON expurgé sur stderr; renvoyer `{ code: 'INTERNAL_ERROR', message, diagnosticId }` au lieu de laisser la fonction rejeter la promesse.
 - [ ] **Step 5: Rejouer le test d’intégration Vercel.**
 

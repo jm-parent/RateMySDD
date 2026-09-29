@@ -1,6 +1,5 @@
 # Design: Diagnostic administrateur du runtime
 
-
 **Date :** 2026-09-29
 **Statut :** Approuvé pour implémentation par l’utilisateur (2026-09-29)
 
@@ -42,6 +41,10 @@ après le démarrage normal. Dans les deux cas, l’accès est protégé par
 uniquement en mémoire dans l’interface, n’est jamais persisté dans le navigateur et
 doit être exclu des journaux. Si le jeton n’est pas configuré, la fonction de
 diagnostic est désactivée.
+
+Le handler Vercel ne charge le module serveur/Copilot qu’après avoir écarté la route
+diagnostique. Cet import dynamique permet encore au diagnostic de répondre si le
+chargement du runtime applicatif échoue pendant un cold start.
 
 ### Contrôles de configuration
 
