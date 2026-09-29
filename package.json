@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
-    "@fastify/static": "^10.1.4",
+    "@fastify/static": "^10.1.5",
     "@github/copilot-sdk": "^1.0.14",
     "@upstash/redis": "^1.39.0",
     "fastify": "^5.4.0",

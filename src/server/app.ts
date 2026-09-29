@@ -1,5 +1,4 @@
 import cookie from '@fastify/cookie';
-import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Writable } from 'node:stream';
@@ -139,7 +138,8 @@ export async function buildApp({
   await app.register(auditRoutes);
 
   const webRoot = resolve(process.cwd(), 'dist', 'web');
-  if (existsSync(webRoot)) {
+  if (!process.env.VERCEL && existsSync(webRoot)) {
+    const { default: fastifyStatic } = await import('@fastify/static');
     await app.register(fastifyStatic, {
       root: webRoot,
       prefix: '/',
