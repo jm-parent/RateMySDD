@@ -23,6 +23,39 @@ describe('runtime diagnostics', () => {
     expect(isDiagnosticsAuthorized('admin-token', '')).toBe(false);
   });
 
+  it('shows expurgated startup causes but keeps request failures generic', () => {
+    const redisUrl = 'https://redis.example.com?token=redis-url-secret';
+    const redisToken = 'redis-token-secret';
+    const encryptionKey = 'ab'.repeat(32);
+    const diagnosticsToken = 'admin-token-secret';
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', redisUrl);
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', redisToken);
+    vi.stubEnv('SESSION_ENCRYPTION_KEY', encryptionKey);
+    vi.stubEnv('DIAGNOSTICS_TOKEN', diagnosticsToken);
+
+    const startupEvent = recordDiagnosticEvent({
+      timestamp: '2026-09-29T10:00:00.000Z',
+      requestId: 'startup-error-id',
+      source: 'startup',
+      errorType: 'Error',
+      message: `Runtime failed for ${redisUrl} ${redisToken} ${encryptionKey} ${diagnosticsToken}`,
+    });
+    const requestEvent = recordDiagnosticEvent({
+      timestamp: '2026-09-29T10:00:01.000Z',
+      requestId: 'request-error-id',
+      source: 'request',
+      errorType: 'Error',
+      message: 'Sensitive request details',
+    });
+
+    expect(startupEvent.message).toContain('Runtime failed for [redacted]');
+    expect(startupEvent.message).not.toContain(redisUrl);
+    expect(startupEvent.message).not.toContain(redisToken);
+    expect(startupEvent.message).not.toContain(encryptionKey);
+    expect(startupEvent.message).not.toContain(diagnosticsToken);
+    expect(requestEvent.message).toBe('Une erreur serveur a été détectée.');
+  });
+
   it('redacts secret environment values and retains only the latest 20 events', () => {
     const redisToken = 'redis-secret-used-in-error';
     const encryptionKey = 'ab'.repeat(32);

@@ -1,9 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import {
-  ConfigurationError,
-  loadConfig,
-} from '../src/server/config.js';
+import { loadConfig } from '../src/server/config.js';
 import { MESSAGE_BY_CODE } from '../src/server/errors.js';
 import {
   createDiagnosticSnapshot,
@@ -91,16 +88,16 @@ export default async function handler(
     const runtime = await getRuntime();
     runtime.app.server.emit('request', request, response);
   } catch (error) {
-    const configurationFailure = error instanceof ConfigurationError;
     const event = recordDiagnosticEvent({
       timestamp: new Date().toISOString(),
       requestId: diagnosticId,
       source: 'startup',
       errorType:
         error instanceof Error ? error.name : 'UnknownError',
-      message: configurationFailure
-        ? error.message
-        : 'Échec de l’initialisation du runtime.',
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Unknown runtime startup failure.',
     });
     console.error(JSON.stringify({ level: 'error', event: 'runtime_startup_failed', ...event }));
     response.setHeader('Cache-Control', 'no-store');

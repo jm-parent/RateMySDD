@@ -72,8 +72,10 @@ describe('Vercel cold-start diagnostics', () => {
       requestId: sessionError.data.diagnosticId,
       source: 'startup',
       errorType: 'Error',
-      message: 'Une erreur serveur a été détectée.',
     });
+    expect(snapshot.data.events.at(-1)?.message).toContain(
+      'error when mocking a module',
+    );
     expect(JSON.stringify(snapshot.data)).not.toContain('redis-secret');
     expect(JSON.stringify(snapshot.data)).not.toContain('7b'.repeat(32));
   });

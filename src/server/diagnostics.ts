@@ -17,6 +17,7 @@ export type DiagnosticRuntimeStatus =
   | 'failed';
 const SENSITIVE_ENVIRONMENT_KEYS = [
   'GITHUB_OAUTH_CLIENT_ID',
+  'UPSTASH_REDIS_REST_URL',
   'UPSTASH_REDIS_REST_TOKEN',
   'SESSION_ENCRYPTION_KEY',
   'DIAGNOSTICS_TOKEN',
@@ -25,9 +26,8 @@ const GENERIC_ERROR_MESSAGE = 'Une erreur serveur a été détectée.';
 
 const diagnosticEvents: DiagnosticEvent[] = [];
 
-function sanitizeMessage(message: string, errorType: string): string {
-  let sanitized =
-    errorType === 'ConfigurationError' ? message : GENERIC_ERROR_MESSAGE;
+function sanitizeMessage(message: string, source: DiagnosticEvent['source']): string {
+  let sanitized = source === 'startup' ? message : GENERIC_ERROR_MESSAGE;
 
   for (const key of SENSITIVE_ENVIRONMENT_KEYS) {
     const secret = process.env[key]?.trim();
@@ -76,7 +76,7 @@ export function recordDiagnosticEvent(event: DiagnosticEvent): DiagnosticEvent {
   const sanitizedEvent = DiagnosticEventSchema.parse({
     ...event,
     errorType: event.errorType.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 80) || 'Error',
-    message: sanitizeMessage(event.message, event.errorType),
+    message: sanitizeMessage(event.message, event.source),
   });
   diagnosticEvents.push(sanitizedEvent);
   if (diagnosticEvents.length > MAX_DIAGNOSTIC_EVENTS) {
