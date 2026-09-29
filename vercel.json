@@ -5,7 +5,7 @@
   "functions": {
     "api/[...path].ts": {
       "maxDuration": 180,
-      "includeFiles": ["dist/web/**"]
+      "includeFiles": "dist/web/**"
     }
   }
 }
