@@ -1,5 +1,7 @@
 import { createServer as createHttpServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
+import { resolve } from 'node:path';
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiErrorSchema, DiagnosticSnapshotSchema } from '../../src/shared/schemas.js';
@@ -43,6 +45,18 @@ afterEach(async () => {
 });
 
 describe('Vercel API function', () => {
+  it('includes the Copilot Linux runtime package in every API function bundle', async () => {
+    const vercelConfig = JSON.parse(
+      await readFile(resolve(process.cwd(), 'vercel.json'), 'utf8'),
+    ) as {
+      functions?: Record<string, { includeFiles?: string }>;
+    };
+
+    expect(vercelConfig.functions?.['api/**/*.ts']).toMatchObject({
+      includeFiles: 'node_modules/@github/copilot-sdk-linux-x64/**',
+    });
+  });
+
   it('returns a diagnostic snapshot after startup fails without initializing the runtime', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('VERCEL_ENV', 'production');

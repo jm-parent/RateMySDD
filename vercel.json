@@ -3,9 +3,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist/web",
   "functions": {
-    "api/[...path].ts": {
+    "api/**/*.ts": {
       "maxDuration": 180,
-      "includeFiles": "dist/web/**"
+      "includeFiles": "node_modules/@github/copilot-sdk-linux-x64/**"
     }
   }
 }
