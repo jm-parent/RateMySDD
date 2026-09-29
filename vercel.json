@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist/web",
   "functions": {
-    "src/server.ts": {
+    "api/[...path].ts": {
       "maxDuration": 180,
       "includeFiles": ["dist/web/**"]
     }
