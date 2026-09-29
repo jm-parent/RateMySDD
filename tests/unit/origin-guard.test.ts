@@ -11,11 +11,11 @@ describe('local origin guard', () => {
     await app?.close();
   });
 
-  function makeApp() {
+  function makeApp(publicOrigin?: string, nodeEnv = 'test') {
     app = Fastify();
     app.addHook(
       'onRequest',
-      createOriginGuard({ port: 5178, nodeEnv: 'test' }),
+      createOriginGuard({ port: 5178, nodeEnv, publicOrigin }),
     );
     app.setErrorHandler(
       (error: FastifyError, _request: FastifyRequest, reply: FastifyReply) => {
@@ -89,5 +89,28 @@ describe('local origin guard', () => {
       headers: { host: 'localhost:5178' },
     });
     expect(response.statusCode).toBe(200);
+  });
+
+  it('allows the configured HTTPS production origin and rejects origin spoofing', async () => {
+    const server = makeApp('https://rate-my-sdd.vercel.app', 'production');
+    const productionOrigin = await server.inject({
+      method: 'POST',
+      url: '/write',
+      headers: {
+        host: 'rate-my-sdd.vercel.app',
+        origin: 'https://rate-my-sdd.vercel.app',
+      },
+    });
+    expect(productionOrigin.statusCode).toBe(200);
+
+    const spoofedOrigin = await server.inject({
+      method: 'POST',
+      url: '/write',
+      headers: {
+        host: 'rate-my-sdd.vercel.app',
+        origin: 'https://evil.example',
+      },
+    });
+    expect(spoofedOrigin.statusCode).toBe(403);
   });
 });

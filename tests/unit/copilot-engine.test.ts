@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 import type { CopilotClientOptions } from '@github/copilot-sdk';
 import { CopilotSdkEngine } from '../../src/server/audit/copilot-engine.js';
 
@@ -35,21 +37,39 @@ function createEngine(listModels: () => Promise<unknown[]> = async () => [{ id: 
 }
 
 describe('CopilotSdkEngine access lifecycle', () => {
-  it('starts an isolated client for the supplied token and reuses it for model checks', async () => {
+  it('starts and stops an isolated client for each access check', async () => {
     const { engine, options, calls } = createEngine();
 
     await expect(engine.checkAccess('access-token-secret')).resolves.toBe(true);
     await expect(engine.checkAccess('access-token-secret')).resolves.toBe(true);
 
-    expect(options).toHaveLength(1);
+    expect(options).toHaveLength(2);
     expect(options[0]).toMatchObject({
       gitHubToken: 'access-token-secret',
       useLoggedInUser: false,
       mode: 'empty',
-      baseDirectory: 'C:\\ratemysdd-temp\\copilot',
       logLevel: 'error',
     });
-    expect(calls).toEqual({ start: 1, listModels: 2, stop: 0 });
+    expect(options[0]?.baseDirectory).toContain(
+      join(
+        'C:\\ratemysdd-temp',
+        'copilot',
+        createHash('sha256').update('access-token-secret').digest('hex'),
+      ),
+    );
+    expect(options[0]?.baseDirectory).not.toBe(options[1]?.baseDirectory);
+    expect(calls).toEqual({ start: 2, listModels: 2, stop: 2 });
+  });
+
+  it('uses separate temporary directories for different user tokens', async () => {
+    const { engine, options } = createEngine();
+
+    await engine.checkAccess('first-user-token');
+    await engine.checkAccess('second-user-token');
+
+    expect(options[0]?.baseDirectory).not.toBe(options[1]?.baseDirectory);
+    expect(options[0]?.baseDirectory).not.toContain('first-user-token');
+    expect(options[1]?.baseDirectory).not.toContain('second-user-token');
   });
 
   it('reports an authorization failure as missing Copilot access and stops the client', async () => {

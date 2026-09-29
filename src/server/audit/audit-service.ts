@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyBaseLogger } from 'fastify';
 import { criteriaForDocumentType } from '../../shared/audit-criteria.js';
 import { TypedAuditResultSchema } from '../../shared/schemas.js';
@@ -16,7 +17,13 @@ interface AuditServiceOptions {
   engine: AuditEngine;
   config: AppConfig;
   logger: Pick<FastifyBaseLogger, 'info'>;
+  lockStore?: {
+    acquireAuditLock(sessionId: string, ownerId: string, ttlMs: number): Promise<boolean>;
+    releaseAuditLock(sessionId: string, ownerId: string): Promise<void>;
+  };
 }
+
+const AUDIT_LOCK_TTL_MS = 240_000;
 
 function mapEngineError(error: EngineError): AppError {
   switch (error.kind) {
@@ -43,7 +50,7 @@ function untrustedContent(body: unknown): string {
   return '';
 }
 
-export function createAuditService({ engine, config, logger }: AuditServiceOptions) {
+export function createAuditService({ engine, config, logger, lockStore }: AuditServiceOptions) {
   return {
     async run(
       auditor: AuditorSession,
@@ -59,15 +66,28 @@ export function createAuditService({ engine, config, logger }: AuditServiceOptio
           : 0);
       let attempts = 0;
       let outcome = 'error';
-      let ownsInProgressFlag = false;
+      let lockOwnerId: string | undefined;
 
       try {
         const request = validateAuditRequest(body);
-        if (auditor.auditInProgress) {
-          throw new AppError('AUDIT_IN_PROGRESS');
+        if (lockStore) {
+          lockOwnerId = randomUUID();
+          if (
+            !(await lockStore.acquireAuditLock(
+              auditor.sessionId,
+              lockOwnerId,
+              AUDIT_LOCK_TTL_MS,
+            ))
+          ) {
+            lockOwnerId = undefined;
+            throw new AppError('AUDIT_IN_PROGRESS');
+          }
+        } else {
+          if (auditor.auditInProgress) {
+            throw new AppError('AUDIT_IN_PROGRESS');
+          }
+          auditor.auditInProgress = true;
         }
-        auditor.auditInProgress = true;
-        ownsInProgressFlag = true;
 
         for (let attempt = 1; attempt <= 2; attempt += 1) {
           attempts = attempt;
@@ -125,7 +145,13 @@ export function createAuditService({ engine, config, logger }: AuditServiceOptio
 
         throw new AppError('AI_OUTPUT_INVALID');
       } finally {
-        if (ownsInProgressFlag) {
+        if (lockStore && lockOwnerId) {
+          try {
+            await lockStore.releaseAuditLock(auditor.sessionId, lockOwnerId);
+          } catch {
+            logger.info({ event: 'audit_lock_release_failed' }, 'audit lock cleanup failed');
+          }
+        } else if (!lockStore && auditor.auditInProgress) {
           auditor.auditInProgress = false;
         }
         logger.info(

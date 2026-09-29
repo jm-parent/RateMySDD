@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { ConfigurationError, parseConfig } from '../../src/server/config.js';
 
 describe('parseConfig', () => {
@@ -13,6 +14,83 @@ describe('parseConfig', () => {
       port: 5178,
       testMode: false,
       tmpDir: resolve('test-root', '.rmsdd-tmp'),
+    });
+  });
+
+  it('uses the Vercel deployment URL unless an explicit public origin is configured', () => {
+    expect(
+      parseConfig({
+        GITHUB_OAUTH_CLIENT_ID: 'client',
+        NODE_ENV: 'production',
+        VERCEL_ENV: 'preview',
+        VERCEL_URL: 'rate-my-sdd-preview.vercel.app',
+        UPSTASH_REDIS_REST_URL: 'https://redis.example.com',
+        UPSTASH_REDIS_REST_TOKEN: 'redis-secret',
+        SESSION_ENCRYPTION_KEY: '7b'.repeat(32),
+      }).publicOrigin,
+    ).toBe('https://rate-my-sdd-preview.vercel.app');
+
+    expect(
+      parseConfig({
+        GITHUB_OAUTH_CLIENT_ID: 'client',
+        NODE_ENV: 'production',
+        VERCEL_ENV: 'preview',
+        VERCEL_URL: 'rate-my-sdd-preview.vercel.app',
+        APP_ORIGIN: 'https://rate-my-sdd.vercel.app',
+        UPSTASH_REDIS_REST_URL: 'https://redis.example.com',
+        UPSTASH_REDIS_REST_TOKEN: 'redis-secret',
+        SESSION_ENCRYPTION_KEY: '7b'.repeat(32),
+      }).publicOrigin,
+    ).toBe('https://rate-my-sdd.vercel.app');
+  });
+
+  it('requires the stable canonical origin in production even when VERCEL_URL exists', () => {
+    expect(() =>
+      parseConfig({
+        GITHUB_OAUTH_CLIENT_ID: 'client',
+        NODE_ENV: 'production',
+        VERCEL_ENV: 'production',
+        VERCEL_URL: 'temporary-deployment.vercel.app',
+        UPSTASH_REDIS_REST_URL: 'https://redis.example.com',
+        UPSTASH_REDIS_REST_TOKEN: 'redis-secret',
+        SESSION_ENCRYPTION_KEY: '7b'.repeat(32),
+      }),
+    ).toThrow(ConfigurationError);
+  });
+
+  it('requires shared Redis storage and a 256-bit encryption key in production', () => {
+    expect(() =>
+      parseConfig({
+        GITHUB_OAUTH_CLIENT_ID: 'client',
+        NODE_ENV: 'production',
+        VERCEL_URL: 'rate-my-sdd.vercel.app',
+      }),
+    ).toThrow(ConfigurationError);
+  });
+
+  it('uses a writable temporary directory for Vercel runtime sessions', () => {
+    expect(
+      parseConfig(
+        { GITHUB_OAUTH_CLIENT_ID: 'client', VERCEL: '1' },
+        resolve('deployment-root'),
+      ).tmpDir,
+    ).toBe(resolve(tmpdir(), 'ratemysdd'));
+  });
+
+  it('loads the shared session storage settings without exposing their values in defaults', () => {
+    expect(
+      parseConfig({
+        GITHUB_OAUTH_CLIENT_ID: 'client',
+        NODE_ENV: 'production',
+        APP_ORIGIN: 'https://rate-my-sdd.vercel.app',
+        UPSTASH_REDIS_REST_URL: 'https://redis.example.com',
+        UPSTASH_REDIS_REST_TOKEN: 'redis-secret',
+        SESSION_ENCRYPTION_KEY: '7b'.repeat(32),
+      }),
+    ).toMatchObject({
+      redisRestUrl: 'https://redis.example.com',
+      redisRestToken: 'redis-secret',
+      sessionEncryptionKey: '7b'.repeat(32),
     });
   });
 

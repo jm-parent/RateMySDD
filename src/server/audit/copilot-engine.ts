@@ -4,6 +4,7 @@ import type {
   CopilotSession,
   SessionConfig,
 } from '@github/copilot-sdk';
+import { createHash, randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { AppConfig } from '../config.js';
@@ -83,9 +84,6 @@ function mapCompletionError(error: unknown): EngineError {
 }
 
 export class CopilotSdkEngine implements AuditEngine {
-  private readonly clients = new Map<string, CopilotClientLike>();
-  private readonly starting = new Map<string, Promise<CopilotClientLike>>();
-
   constructor(
     private readonly config: Pick<
       AppConfig,
@@ -95,16 +93,30 @@ export class CopilotSdkEngine implements AuditEngine {
   ) {}
 
   async checkAccess(token: string): Promise<boolean> {
+    const baseDirectory = this.baseDirectoryForOperation(token);
+    let client: CopilotClientLike | undefined;
     try {
-      const client = await this.getOrStartClient(token);
+      client = await this.startClient(token, baseDirectory);
       await client.listModels();
       return true;
     } catch (error) {
-      await this.discardClient(token);
       if (isAuthorizationFailure(error)) {
         return false;
       }
       throw new EngineError('unavailable', { cause: error });
+    } finally {
+      if (client) {
+        try {
+          await client.stop();
+        } catch {
+          // Access-check cleanup is best-effort; no session state is retained.
+        }
+      }
+      try {
+        await rm(baseDirectory, { recursive: true, force: true });
+      } catch {
+        // Preserve the provider result when temporary-file cleanup fails.
+      }
     }
   }
 
@@ -115,7 +127,13 @@ export class CopilotSdkEngine implements AuditEngine {
       throw new EngineError('timeout');
     }
 
-    const client = await this.getOrStartClient(input.token);
+    const baseDirectory = this.baseDirectoryForOperation(input.token);
+    let client: CopilotClientLike;
+    try {
+      client = await this.startClient(input.token, baseDirectory);
+    } catch (error) {
+      throw mapCompletionError(error);
+    }
     let session: CopilotSessionLike | undefined;
     let unsubscribeAssistant: (() => void) | undefined;
     let unsubscribeIdle: (() => void) | undefined;
@@ -201,10 +219,12 @@ export class CopilotSdkEngine implements AuditEngine {
         }
       }
       try {
-        await rm(resolve(this.config.tmpDir, 'copilot', 'session-state'), {
-          recursive: true,
-          force: true,
-        });
+        await client.stop();
+      } catch (error) {
+        cleanupError ??= error;
+      }
+      try {
+        await rm(baseDirectory, { recursive: true, force: true });
       } catch (error) {
         cleanupError ??= error;
       }
@@ -223,49 +243,22 @@ export class CopilotSdkEngine implements AuditEngine {
   }
 
   async release(token: string): Promise<void> {
-    const pending = this.starting.get(token);
-    if (pending) {
-      await pending.catch(() => undefined);
-    }
-    const client = this.clients.get(token);
-    this.clients.delete(token);
-    if (client) {
-      await client.stop();
-    }
+    void token;
   }
 
-  private async getOrStartClient(token: string): Promise<CopilotClientLike> {
-    const existing = this.clients.get(token);
-    if (existing) {
-      return existing;
-    }
-    const pending = this.starting.get(token);
-    if (pending) {
-      return pending;
-    }
-
-    const startup = this.startClient(token);
-    this.starting.set(token, startup);
-    try {
-      return await startup;
-    } finally {
-      if (this.starting.get(token) === startup) {
-        this.starting.delete(token);
-      }
-    }
-  }
-
-  private async startClient(token: string): Promise<CopilotClientLike> {
+  private async startClient(
+    token: string,
+    baseDirectory: string,
+  ): Promise<CopilotClientLike> {
     const client = this.clientFactory({
       gitHubToken: token,
       useLoggedInUser: false,
       mode: 'empty',
-      baseDirectory: resolve(this.config.tmpDir, 'copilot'),
+      baseDirectory,
       logLevel: 'error',
     });
     try {
       await client.start();
-      this.clients.set(token, client);
       return client;
     } catch (error) {
       try {
@@ -273,16 +266,18 @@ export class CopilotSdkEngine implements AuditEngine {
       } catch {
         // Preserve the startup failure as the actionable error.
       }
+      try {
+        await rm(baseDirectory, { recursive: true, force: true });
+      } catch {
+        // Preserve the startup failure as the actionable error.
+      }
       throw error;
     }
   }
 
-  private async discardClient(token: string): Promise<void> {
-    try {
-      await this.release(token);
-    } catch {
-      // Failed runtime cleanup must not replace the original access error.
-    }
+  private baseDirectoryForOperation(token: string): string {
+    const tokenId = createHash('sha256').update(token).digest('hex');
+    return resolve(this.config.tmpDir, 'copilot', tokenId, randomUUID());
   }
 }
 

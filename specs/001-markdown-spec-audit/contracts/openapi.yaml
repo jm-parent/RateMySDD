@@ -1,15 +1,18 @@
 openapi: 3.1.0
 info:
-  title: RateMySDD — API locale
+  title: RateMySDD — API HTTP
   version: 1.0.0
   description: >
-    API HTTP exposée par le serveur local (127.0.0.1 uniquement) à l'interface web.
+    API HTTP same-origin exposée à l'interface web, sur Vercel en production et sur loopback en local.
     Toutes les routes /api/* hors /api/session et /api/auth/device/* exigent une session
-    authentifiée (cookie HttpOnly `rmsdd_sid`). Toutes les requêtes non-GET exigent l'en-tête
-    `Origin` égal à l'origine de l'application (anti-CSRF). Aucun contenu de document n'est
-    stocké ni journalisé.
+    authentifiée (cookie HttpOnly `rmsdd_sid`). Chaque cookie correspond à une session indépendante.
+    Toutes les requêtes non-GET exigent l'en-tête `Origin` égal à l'origine canonique de
+    l'application (anti-CSRF). Aucun contenu de document n'est stocké ni journalisé.
 servers:
+  - url: /
+    description: API same-origin en production et dans les aperçus Vercel
   - url: http://127.0.0.1:5178
+    description: Serveur local
 components:
   securitySchemes:
     sessionCookie:

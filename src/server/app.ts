@@ -51,7 +51,11 @@ export async function buildApp({
   app.decorate('rateMySDD', { config, engine, deviceFlow, sessionStore });
   app.addHook(
     'onRequest',
-    createOriginGuard({ port: config.port, nodeEnv: process.env.NODE_ENV }),
+    createOriginGuard({
+      port: config.port,
+      nodeEnv: process.env.NODE_ENV,
+      publicOrigin: config.publicOrigin,
+    }),
   );
   await app.register(cookie);
 

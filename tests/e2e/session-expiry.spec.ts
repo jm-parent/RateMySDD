@@ -237,6 +237,48 @@ test('does not restore an in-flight audit after the session account changes', as
   await expect(page.getByRole('row')).toHaveCount(0);
 });
 
+test('keeps two browser profiles authenticated independently', async ({ browser }) => {
+  const firstContext = await browser.newContext();
+  const secondContext = await browser.newContext();
+  try {
+    const firstPage = await firstContext.newPage();
+    const secondPage = await secondContext.newPage();
+    await Promise.all([firstPage.goto('/'), secondPage.goto('/')]);
+    const signInName = 'Se connecter avec GitHub Copilot';
+    await Promise.all([
+      firstPage.getByRole('button', { name: signInName }).click(),
+      secondPage.getByRole('button', { name: signInName }).click(),
+    ]);
+    await Promise.all([
+      expect(firstPage.getByText('Utilisateur de test')).toBeVisible({ timeout: 15_000 }),
+      expect(secondPage.getByText('Utilisateur de test')).toBeVisible({ timeout: 15_000 }),
+    ]);
+
+    const firstSession = await firstPage.evaluate(async () =>
+      fetch('/api/session').then((response) => response.json()),
+    );
+    const secondSession = await secondPage.evaluate(async () =>
+      fetch('/api/session').then((response) => response.json()),
+    );
+    expect(firstSession).toMatchObject({ authenticated: true });
+    expect(secondSession).toMatchObject({ authenticated: true });
+
+    await firstPage.evaluate(async () =>
+      fetch('/api/auth/logout', { method: 'POST' }),
+    );
+    const firstAfterLogout = await firstPage.evaluate(async () =>
+      fetch('/api/session').then((response) => response.json()),
+    );
+    const secondAfterLogout = await secondPage.evaluate(async () =>
+      fetch('/api/session').then((response) => response.json()),
+    );
+    expect(firstAfterLogout).toEqual({ authenticated: false });
+    expect(secondAfterLogout).toMatchObject({ authenticated: true });
+  } finally {
+    await Promise.all([firstContext.close(), secondContext.close()]);
+  }
+});
+
 test('does not restore volatile audit content after a reload', async ({ page }) => {
   await page.goto('/');
   await page

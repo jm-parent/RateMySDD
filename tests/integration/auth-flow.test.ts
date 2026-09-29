@@ -32,16 +32,20 @@ describe('GitHub Copilot authentication flow', () => {
   async function setup(
     polls: ConstructorParameters<typeof FakeDeviceFlowClient>[0],
     hasCopilotAccess = true,
+    secureCookies = false,
   ) {
     const engine = new FakeAuditEngine([], hasCopilotAccess);
     const deviceFlow = new FakeDeviceFlowClient(polls);
     const sessionStore = new SessionStore((token: string) => engine.release(token));
     app = await buildApp({
-      config: parseConfig({
-        GITHUB_OAUTH_CLIENT_ID: 'test-client-id',
-        NODE_ENV: 'test',
-        RMSDD_TEST_MODE: '1',
-      }),
+      config: {
+        ...parseConfig({
+          GITHUB_OAUTH_CLIENT_ID: 'test-client-id',
+          NODE_ENV: 'test',
+          RMSDD_TEST_MODE: '1',
+        }),
+        secureCookies,
+      },
       engine,
       deviceFlow,
       sessionStore,
@@ -81,6 +85,24 @@ describe('GitHub Copilot authentication flow', () => {
       authenticated: true,
       user: { login: 'octo', copilotAccess: 'none' },
     });
+  });
+
+  it('marks Device Flow and session cookies Secure in production mode', async () => {
+    await setup([{ status: 'authorized', accessToken: 'secure-cookie-token' }], true, true);
+    const start = await app.inject({
+      method: 'POST',
+      url: '/api/auth/device/start',
+      headers: localHeaders,
+    });
+    const preAuthCookie = firstCookie(start.headers['set-cookie'], 'rmsdd_pre')!;
+    const authorized = await app.inject({
+      method: 'POST',
+      url: '/api/auth/device/poll',
+      headers: { ...localHeaders, cookie: preAuthCookie },
+    });
+
+    expect(String(start.headers['set-cookie'])).toContain('Secure');
+    expect(String(authorized.headers['set-cookie'])).toContain('Secure');
   });
 
   it('increases polling interval by five seconds after GitHub returns slow_down', async () => {
@@ -194,7 +216,7 @@ describe('GitHub Copilot authentication flow', () => {
     expect(expired.headers['x-session-expires-at']).toBeUndefined();
   });
 
-  it('invalidates the old session and releases its client when a new user signs in', async () => {
+  it('keeps users independent when a second user signs in and logs out', async () => {
     const { engine } = await setup([
       { status: 'authorized', accessToken: 'first-token' },
       { status: 'authorized', accessToken: 'second-token' },
@@ -214,9 +236,30 @@ describe('GitHub Copilot authentication flow', () => {
       url: '/api/session',
       headers: { host: localHeaders.host, cookie: second.sessionCookie },
     });
-    expect(oldSession.json()).toEqual({ authenticated: false });
+    expect(oldSession.json().authenticated).toBe(true);
     expect(newSession.json().authenticated).toBe(true);
-    expect(engine.releasedTokens).toContain('first-token');
+
+    const logoutSecond = await app.inject({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers: { ...localHeaders, cookie: second.sessionCookie },
+    });
+    const firstAfterLogout = await app.inject({
+      method: 'GET',
+      url: '/api/session',
+      headers: { host: localHeaders.host, cookie: first.sessionCookie },
+    });
+    const secondAfterLogout = await app.inject({
+      method: 'GET',
+      url: '/api/session',
+      headers: { host: localHeaders.host, cookie: second.sessionCookie },
+    });
+
+    expect(logoutSecond.statusCode).toBe(204);
+    expect(firstAfterLogout.json().authenticated).toBe(true);
+    expect(secondAfterLogout.json()).toEqual({ authenticated: false });
+    expect(engine.releasedTokens).toContain('second-token');
+    expect(engine.releasedTokens).not.toContain('first-token');
   });
 
   it('rejects a stale session cookie after logout', async () => {

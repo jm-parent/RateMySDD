@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   SESSION_TTL_MS,
+  MemorySessionRepository,
   SessionStore,
   toPublicUser,
 } from '../../src/server/auth/session-store.js';
@@ -61,44 +62,81 @@ describe('SessionStore', () => {
     await expect(store.get(session.sessionId)).resolves.toBe(session);
   });
 
-  it('replaces the previous auditor and releases the previous token', async () => {
+  it('keeps auditor sessions independent and releases only the destroyed token', async () => {
     const released: string[] = [];
     const store = new SessionStore((token) => {
       released.push(token);
     });
     const first = await store.create(auditor);
-    const second = await store.create({ ...auditor, accessToken: 'second-token' });
+    const second = await store.create({
+      ...auditor,
+      login: 'another-user',
+      accessToken: 'second-token',
+    });
+
+    expect(await store.get(first.sessionId)).toBe(first);
+    expect(await store.get(second.sessionId)).toBe(second);
+
+    await store.destroy(first.sessionId);
 
     expect(await store.get(first.sessionId)).toBeUndefined();
     expect(await store.get(second.sessionId)).toBe(second);
     expect(released).toEqual(['access-token-secret']);
   });
 
-  it('stores a single pending device authorization bound to its pre-auth id', async () => {
+  it('shares independent sessions between store instances using the same repository', async () => {
+    const repository = new MemorySessionRepository();
+    const firstStore = new SessionStore(undefined, repository);
+    const secondStore = new SessionStore(undefined, repository);
+    const first = await firstStore.create(auditor);
+    const second = await secondStore.create({
+      ...auditor,
+      login: 'another-user',
+      accessToken: 'second-token',
+    });
+
+    await expect(secondStore.get(first.sessionId)).resolves.toEqual(first);
+    await expect(firstStore.get(second.sessionId)).resolves.toEqual(second);
+  });
+
+  it('keeps pending device authorizations independent by pre-auth id', async () => {
     const store = new SessionStore();
-    const authorization = store.createPendingAuthorization({
+    const first = await store.createPendingAuthorization({
       deviceCode: 'device-code-secret',
       userCode: 'ABCD-1234',
       verificationUri: 'https://github.com/login/device',
       expiresIn: 600,
       interval: 5,
     });
+    const second = await store.createPendingAuthorization({
+      deviceCode: 'another-device-code',
+      userCode: 'EFGH-5678',
+      verificationUri: 'https://github.com/login/device',
+      expiresIn: 600,
+      interval: 5,
+    });
 
-    expect(authorization.preAuthId).toMatch(/^[\w-]{43}$/);
-    expect(store.getPendingAuthorization('another-session')).toBeUndefined();
-    expect(store.getPendingAuthorization(authorization.preAuthId)).toMatchObject({
+    expect(first.preAuthId).toMatch(/^[\w-]{43}$/);
+    expect(second.preAuthId).toMatch(/^[\w-]{43}$/);
+    await expect(store.getPendingAuthorization('another-session')).resolves.toBeUndefined();
+    await expect(store.getPendingAuthorization(first.preAuthId)).resolves.toMatchObject({
       deviceCode: 'device-code-secret',
       interval: 5,
     });
-    store.clearPendingAuthorization(authorization.preAuthId);
-    expect(store.getPendingAuthorization(authorization.preAuthId)).toBeUndefined();
+    await expect(store.getPendingAuthorization(second.preAuthId)).resolves.toMatchObject({
+      deviceCode: 'another-device-code',
+      interval: 5,
+    });
+    await store.clearPendingAuthorization(first.preAuthId);
+    await expect(store.getPendingAuthorization(first.preAuthId)).resolves.toBeUndefined();
+    await expect(store.getPendingAuthorization(second.preAuthId)).resolves.toBeDefined();
   });
 
-  it('expires a pending device authorization', () => {
+  it('expires a pending device authorization', async () => {
     const store = new SessionStore();
     const now = Date.now();
     vi.spyOn(Date, 'now').mockReturnValue(now);
-    const authorization = store.createPendingAuthorization({
+    const authorization = await store.createPendingAuthorization({
       deviceCode: 'device-code-secret',
       userCode: 'ABCD-1234',
       verificationUri: 'https://github.com/login/device',
@@ -107,6 +145,8 @@ describe('SessionStore', () => {
     });
     vi.spyOn(Date, 'now').mockReturnValue(now + 1_001);
 
-    expect(store.getPendingAuthorization(authorization.preAuthId)).toBeUndefined();
+    await expect(
+      store.getPendingAuthorization(authorization.preAuthId),
+    ).resolves.toBeUndefined();
   });
 });

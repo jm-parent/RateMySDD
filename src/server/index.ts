@@ -1,10 +1,13 @@
 import { mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { Redis } from '@upstash/redis';
 import { buildApp } from './app.js';
 import { CopilotSdkEngine } from './audit/copilot-engine.js';
 import { GitHubDeviceFlowClient } from './auth/device-flow.js';
-import { SessionStore } from './auth/session-store.js';
+import { MemorySessionRepository, SessionStore } from './auth/session-store.js';
+import { RedisSessionRepository } from './auth/redis-session-repository.js';
+import { SecretBox } from './security/secret-box.js';
 import type { AppConfig } from './config.js';
 import { ConfigurationError, loadConfig } from './config.js';
 import type { AuditEngine } from './audit/engine.js';
@@ -31,14 +34,29 @@ export async function createServerRuntime(config: AppConfig): Promise<ServerRunt
     deviceFlow = new GitHubDeviceFlowClient(config.githubOAuthClientId);
   }
 
-  const sessionStore = new SessionStore((token) => engine.release(token));
+  const sessionRepository =
+    config.redisRestUrl && config.redisRestToken && config.sessionEncryptionKey
+      ? new RedisSessionRepository(
+          new Redis({
+            url: config.redisRestUrl,
+            token: config.redisRestToken,
+          }),
+          new SecretBox(config.sessionEncryptionKey),
+        )
+      : new MemorySessionRepository();
+  const sessionStore = new SessionStore(
+    (token) => engine.release(token),
+    sessionRepository,
+  );
   let app: Awaited<ReturnType<typeof buildApp>>;
   try {
     app = await buildApp({ config, engine, deviceFlow, sessionStore });
     await app.ready();
   } catch (error) {
-    for (const session of await sessionStore.all()) {
-      await sessionStore.destroy(session.sessionId);
+    if (!sessionStore.persistent) {
+      for (const session of await sessionStore.all()) {
+        await sessionStore.destroy(session.sessionId);
+      }
     }
     await rm(config.tmpDir, { recursive: true, force: true });
     throw error;
@@ -58,10 +76,12 @@ export async function createServerRuntime(config: AppConfig): Promise<ServerRunt
         await app.close();
       } finally {
         try {
-          const sessions = await sessionStore.all();
-          await Promise.all(
-            sessions.map((session) => sessionStore.destroy(session.sessionId)),
-          );
+          if (!sessionStore.persistent) {
+            const sessions = await sessionStore.all();
+            await Promise.all(
+              sessions.map((session) => sessionStore.destroy(session.sessionId)),
+            );
+          }
         } finally {
           await rm(config.tmpDir, { recursive: true, force: true });
         }
@@ -70,10 +90,16 @@ export async function createServerRuntime(config: AppConfig): Promise<ServerRunt
   };
 }
 
-export async function startServer(config: AppConfig): Promise<ServerRuntime> {
+export async function startServer(
+  config: AppConfig,
+  options: { host?: string } = {},
+): Promise<ServerRuntime> {
   const runtime = await createServerRuntime(config);
   try {
-    await runtime.app.listen({ host: '127.0.0.1', port: config.port });
+    await runtime.app.listen({
+      host: options.host ?? '127.0.0.1',
+      port: config.port,
+    });
   } catch (error) {
     await runtime.close();
     throw error;

@@ -40,7 +40,7 @@ rendu et le rapport.
 
 Fonction `bandFor(score)` → label ; affichée à côté de chaque note et dans le rapport.
 
-## Auditor (session serveur, en mémoire)
+## Auditor (session par profil de navigateur)
 
 | Champ | Type | Règles |
 |-------|------|--------|
@@ -51,20 +51,26 @@ Fonction `bandFor(score)` → label ; affichée à côté de chaque note et dans
 | `copilotAccess` | `"active"` \| `"none"` | vérifié à la connexion (FR-002) |
 | `accessToken` | string | **jamais** renvoyé au client ni journalisé |
 | `expiresAt` | Date | expiration d'inactivité : 8 h |
-| `auditInProgress` | boolean | empêche la double soumission (FR-016) |
+| `auditInProgress` | boolean | état local ; le verrou par session est atomique en production (FR-016) |
 
 **État** : `anonymous → pending_device_authorization → authenticated(copilotAccess) → logged_out`.
-Un seul auditeur à la fois (application locale mono-utilisateur, FR-026).
+Chaque profil de navigateur a une session indépendante. En production, les sessions sont
+persistées avec une expiration de huit heures et le jeton OAuth est chiffré au repos. Une
+nouvelle connexion ou déconnexion n'invalide pas les autres profils.
 
 ## DeviceAuthorization (transitoire)
 
 | Champ | Type | Règles |
 |-------|------|--------|
+| `preAuthId` | string (≥ 128 bits aléatoires) | identifiant opaque, uniquement dans le cookie `HttpOnly` |
 | `deviceCode` | string | serveur uniquement |
 | `userCode` | string | affiché à l'auditeur |
 | `verificationUri` | URL | `https://github.com/login/device` |
 | `interval` | int (s) | respecté lors du polling (augmenté si `slow_down`) |
 | `expiresAt` | Date | au-delà → statut `expired` |
+
+Plusieurs autorisations Device Flow peuvent être en attente simultanément. En production,
+`deviceCode` est chiffré au repos et chaque polling est réservé atomiquement par `preAuthId`.
 
 ## SubmittedDocument (requête d'audit, éphémère)
 

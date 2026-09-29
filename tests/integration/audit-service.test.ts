@@ -11,6 +11,7 @@ import {
 } from '../../src/server/audit/engine.js';
 import { createAuditService } from '../../src/server/audit/audit-service.js';
 import { parseConfig } from '../../src/server/config.js';
+import { SessionStore } from '../../src/server/auth/session-store.js';
 import { FakeAuditEngine } from '../helpers/fake-engine.js';
 
 const validOutput = readFileSync(
@@ -34,6 +35,7 @@ function auditor(): AuditorSession {
 function createService(
   engine: AuditEngine,
   logRecords: unknown[] = [],
+  lockStore?: SessionStore,
 ): ReturnType<typeof createAuditService> {
   return createAuditService({
     engine,
@@ -47,6 +49,7 @@ function createService(
         logRecords.push(record);
       },
     },
+    lockStore,
   });
 }
 
@@ -239,6 +242,49 @@ describe('audit service', () => {
     resolveCompletion?.({ text: validOutput, model: 'test-model' });
     await expect(first).resolves.toMatchObject({ evaluations: expect.any(Array) });
     expect(session.auditInProgress).toBe(false);
+  });
+
+  it('allows different users to audit concurrently while locking one user across requests', async () => {
+    const completions: Array<(result: { text: string; model: string }) => void> = [];
+    const engine: AuditEngine = {
+      async checkAccess() {
+        return true;
+      },
+      complete() {
+        return new Promise((resolve) => {
+          completions.push(resolve);
+        });
+      },
+      async release() {},
+    };
+    const service = createService(engine, [], new SessionStore());
+    const firstUser = auditor();
+    const secondUser = { ...auditor(), sessionId: 'second-user-session' };
+    const request = { content: '# Spécification', source: 'paste' as const };
+    const firstAudit = service.run(firstUser, request, new AbortController().signal);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const duplicateAudit = service.run(
+      firstUser,
+      request,
+      new AbortController().signal,
+    );
+    await expect(duplicateAudit).rejects.toMatchObject({
+      code: 'AUDIT_IN_PROGRESS',
+    });
+
+    const secondAudit = service.run(
+      secondUser,
+      request,
+      new AbortController().signal,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(completions).toHaveLength(2);
+    for (const complete of completions) {
+      complete({ text: validOutput, model: 'gpt-5' });
+    }
+
+    await expect(Promise.all([firstAudit, secondAudit])).resolves.toHaveLength(2);
   });
 
   it('resets the in-progress flag after request validation fails', async () => {

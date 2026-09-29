@@ -8,6 +8,7 @@ const auditRoutes: FastifyPluginAsync = async (app) => {
     engine: app.rateMySDD.engine,
     config: app.rateMySDD.config,
     logger: app.log,
+    lockStore: app.rateMySDD.sessionStore,
   });
 
   app.post(

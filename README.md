@@ -1,7 +1,8 @@
 # RateMySDD
 
-RateMySDD est une application web locale qui aide un utilisateur connecté avec son compte
-GitHub Copilot à auditer une spécification Markdown. Le rapport évalue toujours les six
+RateMySDD est une application web qui aide les utilisateurs connectés avec leur compte GitHub
+Copilot à auditer une spécification Markdown. Chaque profil de navigateur possède sa session.
+Le rapport évalue toujours les six
 piliers canoniques, avec une note de 0 à 100, une description et des points d’amélioration
 pour chacun, puis calcule le score global comme moyenne des six notes.
 
@@ -45,13 +46,52 @@ npm start
 Ouvrez ensuite [http://127.0.0.1:5178](http://127.0.0.1:5178). En développement, `npm run dev`
 lance le serveur et l’interface Vite.
 
+## Déploiement multi-utilisateur sur Vercel
+
+Le point d’entrée Node/Fastify, les assets Vite et la durée de fonction sont configurés dans
+`src/server.ts` et `vercel.json`. Le build produit le frontend dans `dist/web`.
+
+1. Créez une base Redis avec l’API REST activée dans Upstash.
+2. Dans Vercel, gardez la racine du dépôt comme **Root Directory**, utilisez Node.js **22.x**
+   ou plus récent, `npm run build` comme commande de build et `dist/web` comme dossier de sortie.
+3. Configurez ces variables dans **Preview** et **Production** :
+
+   ```dotenv
+   GITHUB_OAUTH_CLIENT_ID=...
+   UPSTASH_REDIS_REST_URL=https://...
+   UPSTASH_REDIS_REST_TOKEN=...
+   SESSION_ENCRYPTION_KEY=...
+   ```
+
+   `SESSION_ENCRYPTION_KEY` doit être une clé aléatoire de 32 octets encodée en hexadécimal
+   (64 caractères). Vous pouvez en générer une avec :
+
+   ```powershell
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+   ```
+
+   Ne publiez pas ces valeurs dans le dépôt. Si vous utilisez un domaine personnalisé,
+   configurez `APP_ORIGIN=https://votre-domaine.example` dans **Production**, avec l’alias stable
+   que vos utilisateurs ouvrent (par exemple `https://rate-my-sdd.vercel.app`). En **Preview**,
+   laissez-la absente : Vercel fournit `VERCEL_URL` pour vérifier l’origine de chaque déploiement.
+4. Déployez d’abord un **Preview** et testez le flux GitHub ainsi qu’un audit réel. Le SDK
+   démarre le CLI Copilot pendant une fonction Vercel ; un build local ne valide pas ce point.
+   La fonction d’audit est limitée à 180 secondes par `vercel.json`.
+
+Chaque profil de navigateur conserve sa propre session. Les sessions expirent après huit heures
+d’inactivité ; Redis conserve uniquement l’état d’authentification chiffré, jamais les textes ou
+rapports d’audit. La clé de chiffrement doit rester stable : son remplacement empêche le
+déchiffrement des sessions et autorisations déjà stockées. Utilisez des profils de navigateur
+distincts pour des utilisateurs connectés simultanément.
+
 ## Utilisation et confidentialité
 
 Connectez-vous avec GitHub, puis collez une spécification Markdown ou chargez un fichier
 `.md` (200 Ko maximum). Le contenu est transmis à Copilot avec le compte de l’utilisateur
 connecté afin de générer l’audit. RateMySDD ne conserve ni le document ni l’historique des
-résultats ; les journaux ne contiennent pas le contenu soumis. Le serveur n’écoute que sur
-`127.0.0.1`, et le jeton GitHub reste en mémoire côté serveur.
+résultats ; les journaux ne contiennent pas le contenu soumis. En local, le jeton GitHub reste
+en mémoire côté serveur. Sur Vercel, tokens et codes Device Flow sont chiffrés avant leur
+stockage temporaire dans Redis.
 
 Avant de soumettre des documents, vérifiez qu’ils peuvent être transmis au service Copilot
 associé à votre compte.

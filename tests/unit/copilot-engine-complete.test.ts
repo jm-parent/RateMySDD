@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CopilotClientOptions, SessionConfig } from '@github/copilot-sdk';
@@ -15,7 +16,7 @@ interface TestRuntime {
   clientOptions: CopilotClientOptions[];
   sessionConfigs: SessionConfig[];
   listeners: Map<EventType, EventHandler>;
-  calls: { start: number; send: number; disconnect: number; deleteSession: number };
+  calls: { start: number; send: number; disconnect: number; deleteSession: number; stop: number };
 }
 
 const temporaryDirectories: string[] = [];
@@ -38,11 +39,12 @@ async function createRuntime(
 ): Promise<TestRuntime> {
   const tmpDir = await mkdtemp(join(tmpdir(), 'ratemysdd-copilot-'));
   temporaryDirectories.push(tmpDir);
-  await mkdir(join(tmpDir, 'copilot', 'session-state'), { recursive: true });
+  const tokenId = createHash('sha256').update('access-token-secret').digest('hex');
+  await mkdir(join(tmpDir, 'copilot', tokenId, 'session-state'), { recursive: true });
   const clientOptions: CopilotClientOptions[] = [];
   const sessionConfigs: SessionConfig[] = [];
   const listeners = new Map<EventType, EventHandler>();
-  const calls = { start: 0, send: 0, disconnect: 0, deleteSession: 0 };
+  const calls = { start: 0, send: 0, disconnect: 0, deleteSession: 0, stop: 0 };
   const fakeSession = {
     sessionId: 'test-session-id',
     on(event: EventType, handler: EventHandler) {
@@ -74,6 +76,7 @@ async function createRuntime(
       calls.deleteSession += 1;
     },
     async stop() {
+      calls.stop += 1;
       return [];
     },
   } as unknown as CopilotClientLike;
@@ -128,6 +131,17 @@ describe('CopilotSdkEngine completion', () => {
     expect(runtime.calls).toMatchObject({ start: 1, send: 1, disconnect: 1, deleteSession: 1 });
   });
 
+  it('starts and stops a fresh CLI client for every completion', async () => {
+    const runtime = await createRuntime();
+
+    await runtime.engine.complete(input());
+    await runtime.engine.complete(input());
+
+    expect(runtime.clientOptions).toHaveLength(2);
+    expect(runtime.calls.start).toBe(2);
+    expect(runtime.calls.stop).toBe(2);
+  });
+
   it('disconnects and deletes the session when the requested completion times out', async () => {
     const runtime = await createRuntime(() => new Promise<void>(() => undefined));
 
@@ -168,9 +182,12 @@ describe('CopilotSdkEngine completion', () => {
 
   it('removes temporary Copilot session state after completion', async () => {
     const runtime = await createRuntime();
-    const stateDirectory = join(runtime.tmpDir, 'copilot', 'session-state');
 
     await runtime.engine.complete(input());
+    const stateDirectory = join(
+      runtime.clientOptions[0]!.baseDirectory as string,
+      'session-state',
+    );
     await expect(
       import('node:fs/promises').then(({ access }) => access(stateDirectory)),
     ).rejects.toThrow();
