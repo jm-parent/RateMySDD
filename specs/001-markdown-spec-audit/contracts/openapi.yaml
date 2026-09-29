@@ -4,8 +4,9 @@ info:
   version: 1.0.0
   description: >
     API HTTP same-origin exposée à l'interface web, sur Vercel en production et sur loopback en local.
-    Toutes les routes /api/* hors /api/session et /api/auth/device/* exigent une session
-    authentifiée (cookie HttpOnly `rmsdd_sid`). Chaque cookie correspond à une session indépendante.
+    Toutes les routes /api/* hors /api/session, /api/auth/device/* et /api/diagnostics exigent une session
+    authentifiée (cookie HttpOnly `rmsdd_sid`). La route de diagnostic exige `DIAGNOSTICS_TOKEN`
+    comme Bearer. Chaque cookie correspond à une session indépendante.
     Toutes les requêtes non-GET exigent l'en-tête `Origin` égal à l'origine canonique de
     l'application (anti-CSRF). Aucun contenu de document n'est stocké ni journalisé.
 servers:
@@ -19,6 +20,10 @@ components:
       type: apiKey
       in: cookie
       name: rmsdd_sid
+    diagnosticsToken:
+      type: http
+      scheme: bearer
+      bearerFormat: DIAGNOSTICS_TOKEN
   headers:
     SessionExpiresAt:
       description: >
@@ -27,6 +32,12 @@ components:
       schema:
         type: string
         format: date-time
+    DiagnosticId:
+      description: Identifiant à rechercher dans les logs serveur pour corréler une erreur 5xx.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
   schemas:
     ErrorCode:
       type: string
@@ -54,6 +65,58 @@ components:
         message:
           type: string
           description: Message en français, sans détail technique interne (FR-023)
+        diagnosticId:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Présent uniquement sur les erreurs serveur 5xx.
+    DiagnosticStatus:
+      type: string
+      enum: [valid, missing, invalid, optional]
+    DiagnosticVariable:
+      type: object
+      required: [key, status]
+      additionalProperties: false
+      not:
+        required: [value]
+        properties:
+          key:
+            enum:
+              - GITHUB_OAUTH_CLIENT_ID
+              - UPSTASH_REDIS_REST_TOKEN
+              - SESSION_ENCRYPTION_KEY
+              - DIAGNOSTICS_TOKEN
+      properties:
+        key: { type: string, minLength: 1 }
+        status: { $ref: '#/components/schemas/DiagnosticStatus' }
+        value:
+          type: string
+          description: Valeur non sensible uniquement; les secrets ne sont jamais retournés.
+    DiagnosticEvent:
+      type: object
+      required: [timestamp, requestId, source, errorType, message]
+      additionalProperties: false
+      properties:
+        timestamp: { type: string, format: date-time }
+        requestId: { type: string, minLength: 1, maxLength: 128 }
+        source: { type: string, enum: [startup, request] }
+        errorType: { type: string, minLength: 1, maxLength: 80 }
+        message: { type: string, minLength: 1, maxLength: 300 }
+    DiagnosticSnapshot:
+      type: object
+      required: [runtime, environment, events]
+      additionalProperties: false
+      properties:
+        runtime:
+          type: string
+          enum: [not_started, starting, ready, failed]
+        environment:
+          type: array
+          items: { $ref: '#/components/schemas/DiagnosticVariable' }
+        events:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/DiagnosticEvent' }
     User:
       type: object
       required: [login, name, avatarUrl, copilotAccess]
@@ -155,10 +218,31 @@ components:
       headers:
         X-Session-Expires-At:
           $ref: '#/components/headers/SessionExpiresAt'
+        X-Diagnostic-Id:
+          $ref: '#/components/headers/DiagnosticId'
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
 paths:
+  /api/diagnostics:
+    get:
+      summary: Diagnostic administrateur du runtime
+      description: >
+        Vérifie les statuts de configuration et retourne les erreurs expurgées de l’instance
+        courante. Les valeurs secrètes ne sont jamais retournées; l’historique mémoire est limité
+        à 20 événements de l’instance chaude.
+      security: [{ diagnosticsToken: [] }]
+      responses:
+        '200':
+          description: Snapshot diagnostique non mis en cache
+          headers:
+            Cache-Control:
+              description: no-store
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiagnosticSnapshot' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/session:
     get:
       summary: État de la session courante

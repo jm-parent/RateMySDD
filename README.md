@@ -75,6 +75,20 @@ Le point d’entrée Node/Fastify, les assets Vite et la durée de fonction sont
    utilisateurs ouvrent. Sans domaine personnalisé, Vercel fournit automatiquement
    `VERCEL_PROJECT_PRODUCTION_URL` comme origine stable. En **Preview**, laissez `APP_ORIGIN`
    absente : `VERCEL_URL` sert à vérifier l’origine de chaque déploiement.
+   Pour activer le diagnostic administrateur sur le déploiement, ajoutez `DIAGNOSTICS_TOKEN`
+   comme variable de type **Secret** dans **Production**. En local, définissez également cette
+   variable dans l’environnement du serveur si vous voulez utiliser le panneau. Générez une
+   valeur aléatoire d’au moins 32 octets :
+
+   ```powershell
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+   ```
+
+   Après le déploiement, le bouton **Diagnostic administrateur** de l’écran de connexion permet
+   de vérifier les statuts de configuration et les erreurs expurgées de l’instance. Le tampon
+   conserve au plus 20 événements en mémoire sur une instance chaude; les journaux complets et
+   durables restent consultables dans Vercel avec l’identifiant de diagnostic.
+
 4. Déployez d’abord un **Preview** et testez le flux GitHub ainsi qu’un audit réel. Le SDK
    démarre le CLI Copilot pendant une fonction Vercel ; un build local ne valide pas ce point.
    La fonction d’audit est limitée à 180 secondes par `vercel.json`.

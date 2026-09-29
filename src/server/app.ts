@@ -9,6 +9,12 @@ import type { AppConfig } from './config.js';
 import { STATUS_BY_CODE, toApiError } from './errors.js';
 import type { AuditEngine } from './audit/engine.js';
 import type { ApiError } from '../shared/schemas.js';
+import {
+  createDiagnosticSnapshot,
+  extractBearerToken,
+  isDiagnosticsAuthorized,
+  recordDiagnosticEvent,
+} from './diagnostics.js';
 import { createOriginGuard } from './security/origin-guard.js';
 import type { DeviceFlowClient } from './auth/device-flow.js';
 import { authRoutes } from './auth/routes.js';
@@ -31,6 +37,7 @@ export async function buildApp({
   logStream,
 }: BuildAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
+    requestIdHeader: 'x-diagnostic-id',
     logger: {
       level: 'info',
       stream: logStream,
@@ -71,7 +78,7 @@ export async function buildApp({
     );
   });
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     const code =
       error instanceof Error &&
       'statusCode' in error &&
@@ -88,7 +95,44 @@ export async function buildApp({
         }
       : toApiError(error);
     const statusCode = code ? STATUS_BY_CODE[code] : STATUS_BY_CODE[publicError.code];
+    if (statusCode >= 500) {
+      const diagnosticId = request.id.slice(0, 128);
+      const event = recordDiagnosticEvent({
+        timestamp: new Date().toISOString(),
+        requestId: diagnosticId,
+        source: 'request',
+        errorType: error instanceof Error ? error.name : 'UnknownError',
+        message: error instanceof Error ? error.message : 'Erreur serveur.',
+      });
+      app.log.error(
+        {
+          diagnosticId,
+          errorType: event.errorType,
+          message: event.message,
+        },
+        'server request failed',
+      );
+      reply.header('X-Diagnostic-Id', diagnosticId);
+      reply.status(statusCode).send({ ...publicError, diagnosticId });
+      return;
+    }
     reply.status(statusCode).send(publicError);
+  });
+
+  app.get('/api/diagnostics', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    if (
+      !isDiagnosticsAuthorized(
+        extractBearerToken(request.headers.authorization),
+        process.env.DIAGNOSTICS_TOKEN,
+      )
+    ) {
+      return reply.code(404).send({
+        code: 'INTERNAL_ERROR',
+        message: 'Diagnostic indisponible.',
+      });
+    }
+    return createDiagnosticSnapshot('ready');
   });
 
   await app.register(authRoutes);

@@ -34,6 +34,7 @@ type OpenApiResponse = {
 
 type OpenApiOperation = {
   responses?: Record<string, OpenApiResponse>;
+  security?: Array<Record<string, string[]>>;
 };
 
 const openApiPaths = specification.paths as Record<
@@ -128,6 +129,50 @@ describe('authentication API contract', () => {
     expect(
       sessionExpiryHeader('/api/auth/device/poll', 'post'),
     ).toMatchObject(expectedHeader);
+  });
+
+  it('documents protected diagnostics and correlated API errors', () => {
+    const snapshot = {
+      runtime: 'failed',
+      environment: [
+        { key: 'GITHUB_OAUTH_CLIENT_ID', status: 'valid' },
+        {
+          key: 'EFFECTIVE_PUBLIC_ORIGIN',
+          status: 'valid',
+          value: 'https://rate-my-sdd.vercel.app',
+        },
+      ],
+      events: [
+        {
+          timestamp: '2026-09-29T10:00:00.000Z',
+          requestId: 'diagnostic-request-id',
+          source: 'startup',
+          errorType: 'ConfigurationError',
+          message: 'Configuration invalide.',
+        },
+      ],
+    };
+    const diagnosticOperation = openApiPaths['/api/diagnostics']?.get;
+
+    expect(
+      matchesSchema('ApiError', {
+        code: 'INTERNAL_ERROR',
+        message: 'Une erreur inattendue est survenue.',
+        diagnosticId: 'diagnostic-request-id',
+      }),
+    ).toBe(true);
+    expect(matchesSchema('DiagnosticSnapshot', snapshot)).toBe(true);
+    expect(
+      matchesSchema('DiagnosticSnapshot', {
+        ...snapshot,
+        environment: [
+          { key: 'UPSTASH_REDIS_REST_TOKEN', status: 'valid', value: 'secret' },
+        ],
+      }),
+    ).toBe(false);
+    expect(diagnosticOperation?.security).toEqual([
+      { diagnosticsToken: [] },
+    ]);
   });
 
   it('returns an unauthenticated session that matches the OpenAPI schema', async () => {

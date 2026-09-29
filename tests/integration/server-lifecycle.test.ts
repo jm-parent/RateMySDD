@@ -1,10 +1,16 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
+import { Writable } from 'node:stream';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getDiagnosticEvents } from '../../src/server/diagnostics.js';
+import { buildApp } from '../../src/server/app.js';
+import { SessionStore } from '../../src/server/auth/session-store.js';
 import { parseConfig } from '../../src/server/config.js';
+import { DiagnosticSnapshotSchema } from '../../src/shared/schemas.js';
+import { createTestDependencies } from '../../src/server/testing/test-mode.js';
 import {
   createServerRuntime,
   startServer,
@@ -21,6 +27,7 @@ afterEach(async () => {
       rm(directory, { recursive: true, force: true }),
     ),
   );
+  vi.unstubAllEnvs();
 });
 
 async function temporaryDirectory(): Promise<string> {
@@ -53,6 +60,99 @@ function testConfig(tmpDir: string, port = 5178) {
 }
 
 describe('server lifecycle', () => {
+  it('serves protected environment diagnostics from the local Fastify app', async () => {
+    const tmpDir = await temporaryDirectory();
+    const adminToken = 'local-diagnostics-secret';
+    vi.stubEnv('DIAGNOSTICS_TOKEN', adminToken);
+    const runtime = await createServerRuntime(testConfig(tmpDir));
+    closeRuntime = () => runtime.close();
+
+    const denied = await runtime.app.inject({
+      method: 'GET',
+      url: '/api/diagnostics',
+      headers: { host: '127.0.0.1:5178' },
+    });
+    expect(denied.statusCode).toBe(404);
+    expect(denied.json()).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'Diagnostic indisponible.',
+    });
+
+    const response = await runtime.app.inject({
+      method: 'GET',
+      url: '/api/diagnostics',
+      headers: {
+        host: '127.0.0.1:5178',
+        authorization: `Bearer ${adminToken}`,
+      },
+    });
+    const parsedSnapshot = DiagnosticSnapshotSchema.safeParse(response.json());
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(parsedSnapshot.success).toBe(true);
+    if (!parsedSnapshot.success) {
+      return;
+    }
+    expect(parsedSnapshot.data.runtime).toBe('ready');
+    expect(
+      parsedSnapshot.data.environment.find(
+        ({ key }) => key === 'DIAGNOSTICS_TOKEN',
+      ),
+    ).toEqual({ key: 'DIAGNOSTICS_TOKEN', status: 'valid' });
+    expect(JSON.stringify(parsedSnapshot.data)).not.toContain(adminToken);
+  });
+
+  it('correlates Fastify 5xx responses with an expurgated event and log', async () => {
+    const logLines: string[] = [];
+    const logStream = new Writable({
+      write(chunk, _encoding, callback) {
+        logLines.push(chunk.toString());
+        callback();
+      },
+    });
+    const { engine, deviceFlow } = createTestDependencies();
+    const app = await buildApp({
+      config: testConfig(await temporaryDirectory()),
+      engine,
+      deviceFlow,
+      sessionStore: new SessionStore((token) => engine.release(token)),
+      logStream,
+    });
+
+    app.get('/api/test-failure', async () => {
+      throw new Error('sensitive exception detail');
+    });
+
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/test-failure',
+        headers: {
+          host: '127.0.0.1:5178',
+          'x-diagnostic-id': 'diagnostic-test-id',
+        },
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.headers['x-diagnostic-id']).toBe('diagnostic-test-id');
+      expect(response.json()).toMatchObject({
+        code: 'INTERNAL_ERROR',
+        diagnosticId: 'diagnostic-test-id',
+      });
+      expect(getDiagnosticEvents().at(-1)).toMatchObject({
+        requestId: 'diagnostic-test-id',
+        source: 'request',
+        errorType: 'Error',
+        message: 'Une erreur serveur a été détectée.',
+      });
+      expect(logLines.join('')).toContain('diagnostic-test-id');
+      expect(logLines.join('')).not.toContain('sensitive exception detail');
+    } finally {
+      await app.close();
+    }
+  });
+
   it('purges the temporary directory before building the application', async () => {
     const tmpDir = await temporaryDirectory();
     const staleFile = join(tmpDir, 'copilot', 'session-state', 'old-session.json');

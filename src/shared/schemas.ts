@@ -28,9 +28,62 @@ export const ApiErrorSchema = z
   .object({
     code: ErrorCodeSchema,
     message: z.string().min(1),
+    diagnosticId: z.string().min(1).max(128).optional(),
   })
   .strict();
 export type ApiError = z.infer<typeof ApiErrorSchema>;
+
+export const DiagnosticStatusSchema = z.enum([
+  'valid',
+  'missing',
+  'invalid',
+  'optional',
+]);
+
+const SECRET_DIAGNOSTIC_KEYS = new Set([
+  'GITHUB_OAUTH_CLIENT_ID',
+  'UPSTASH_REDIS_REST_TOKEN',
+  'SESSION_ENCRYPTION_KEY',
+  'DIAGNOSTICS_TOKEN',
+]);
+
+export const DiagnosticVariableSchema = z
+  .object({
+    key: z.string().min(1),
+    status: DiagnosticStatusSchema,
+    value: z.string().optional(),
+  })
+  .strict()
+  .superRefine(({ key, value }, context) => {
+    if (value !== undefined && SECRET_DIAGNOSTIC_KEYS.has(key)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Les valeurs sensibles ne peuvent pas être incluses.',
+        path: ['value'],
+      });
+    }
+  });
+export type DiagnosticVariable = z.infer<typeof DiagnosticVariableSchema>;
+
+export const DiagnosticEventSchema = z
+  .object({
+    timestamp: z.string().datetime({ offset: true }),
+    requestId: z.string().min(1).max(128),
+    source: z.enum(['startup', 'request']),
+    errorType: z.string().min(1).max(80),
+    message: z.string().min(1).max(300),
+  })
+  .strict();
+export type DiagnosticEvent = z.infer<typeof DiagnosticEventSchema>;
+
+export const DiagnosticSnapshotSchema = z
+  .object({
+    runtime: z.enum(['not_started', 'starting', 'ready', 'failed']),
+    environment: z.array(DiagnosticVariableSchema),
+    events: z.array(DiagnosticEventSchema).max(20),
+  })
+  .strict();
+export type DiagnosticSnapshot = z.infer<typeof DiagnosticSnapshotSchema>;
 
 export const UserSchema = z
   .object({

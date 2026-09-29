@@ -1,5 +1,9 @@
-import { ApiErrorSchema } from '../shared/schemas.js';
-import type { ApiError, ErrorCode } from '../shared/schemas.js';
+import { ApiErrorSchema, DiagnosticSnapshotSchema } from '../shared/schemas.js';
+import type {
+  ApiError,
+  DiagnosticSnapshot,
+  ErrorCode,
+} from '../shared/schemas.js';
 import type { ZodType } from 'zod';
 
 export class ApiClientError extends Error {
@@ -145,6 +149,14 @@ async function request<T>(
 
 export function apiGet<T>(path: string, schema: ZodType<T>): Promise<T> {
   return request(path, { method: 'GET' }, schema);
+}
+
+export function apiGetDiagnostics(token: string): Promise<DiagnosticSnapshot> {
+  return request(
+    '/api/diagnostics',
+    { method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+    DiagnosticSnapshotSchema,
+  );
 }
 
 export function apiPost<T>(

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   AiAuditOutputSchema,
+  ApiErrorSchema,
   AuditRequestSchema,
+  DiagnosticSnapshotSchema,
   TypedAuditResultSchema,
 } from '../../src/shared/schemas.js';
 
@@ -170,5 +172,50 @@ describe('AuditResultSchema', () => {
     };
 
     expect(TypedAuditResultSchema.safeParse(result).success).toBe(true);
+  });
+});
+
+describe('diagnostic API schemas', () => {
+  it('accepts an expurgated diagnostic snapshot and rejects secret fields', () => {
+    const snapshot = {
+      runtime: 'failed',
+      environment: [
+        { key: 'GITHUB_OAUTH_CLIENT_ID', status: 'valid' },
+        {
+          key: 'EFFECTIVE_PUBLIC_ORIGIN',
+          status: 'valid',
+          value: 'https://rate-my-sdd.vercel.app',
+        },
+      ],
+      events: [
+        {
+          timestamp: '2026-09-29T10:00:00.000Z',
+          requestId: 'diagnostic-request-id',
+          source: 'startup',
+          errorType: 'ConfigurationError',
+          message: 'Configuration invalide.',
+        },
+      ],
+    };
+
+    expect(DiagnosticSnapshotSchema.safeParse(snapshot).success).toBe(true);
+    expect(
+      DiagnosticSnapshotSchema.safeParse({
+        ...snapshot,
+        environment: [
+          { key: 'UPSTASH_REDIS_REST_TOKEN', status: 'valid', value: 'secret' },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a diagnostic ID on normalized server errors', () => {
+    expect(
+      ApiErrorSchema.safeParse({
+        code: 'INTERNAL_ERROR',
+        message: 'Une erreur inattendue est survenue.',
+        diagnosticId: 'diagnostic-request-id',
+      }).success,
+    ).toBe(true);
   });
 });

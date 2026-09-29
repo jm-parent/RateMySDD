@@ -467,6 +467,130 @@ button:disabled {
   color: #9d1a32;
 }
 
+.diagnostics-entry {
+  margin-top: 1.25rem;
+  border-top: 1px solid #d6deea;
+  padding-top: 0.8rem;
+}
+
+.diagnostics-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 0;
+  padding: 0.35rem 0;
+  color: #0756a6;
+  background: transparent;
+}
+
+.diagnostics-panel {
+  margin-top: 0.75rem;
+  border-top: 1px solid #d6deea;
+  padding-top: 0.85rem;
+}
+
+.diagnostics-panel h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1.05rem;
+}
+
+.diagnostics-panel h3 {
+  margin: 1rem 0 0.45rem;
+  font-size: 0.85rem;
+}
+
+.diagnostics-form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.diagnostics-form input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #b8c5d6;
+  border-radius: 6px;
+  padding: 0.65rem 0.75rem;
+  color: #172033;
+  background: #fff;
+}
+
+.diagnostics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.diagnostics-actions button {
+  padding: 0.5rem 0.75rem;
+}
+
+.diagnostics-checks,
+.diagnostics-events {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.diagnostics-checks li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+}
+
+.diagnostics-checks code,
+.diagnostics-events code {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.diagnostics-checks li[data-status='valid'] > span:first-of-type {
+  color: #126534;
+}
+
+.diagnostics-checks li[data-status='missing'] > span:first-of-type,
+.diagnostics-checks li[data-status='invalid'] > span:first-of-type {
+  color: #9d1a32;
+}
+
+.diagnostics-value {
+  grid-column: 1 / -1;
+  color: #536176;
+  overflow-wrap: anywhere;
+}
+
+.diagnostics-events li {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #e5eaf1;
+  font-size: 0.75rem;
+}
+
+.diagnostics-events p,
+.diagnostics-runtime,
+.diagnostics-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.diagnostics-events time,
+.diagnostics-note {
+  color: #536176;
+}
+
+.diagnostics-note {
+  margin-top: 0.75rem;
+  font-size: 0.7rem;
+}
+
+.diagnostics-error {
+  margin: 0.75rem 0;
+  color: #9d1a32;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

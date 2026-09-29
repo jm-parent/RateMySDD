@@ -20,6 +20,8 @@ describe('authentication components', () => {
     expect(html).toContain('RateMySDD — Audit de spécifications');
     expect(html).toContain('Se connecter avec GitHub Copilot');
     expect(html).toContain('Se connecter avec GitHub Copilot');
+    expect(html).toContain('Diagnostic administrateur');
+    expect(html).toContain('aria-expanded="false"');
   });
 
   it('renders user identity and an accessible sign-out action', () => {

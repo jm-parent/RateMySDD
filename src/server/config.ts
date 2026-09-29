@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { z } from 'zod';
+import type { DiagnosticVariable } from '../shared/schemas.js';
 
 const configurationSchema = z.object({
   githubOAuthClientId: z.string().trim().min(1, 'GITHUB_OAUTH_CLIENT_ID est requis.'),
@@ -27,6 +28,159 @@ export class ConfigurationError extends Error {
   }
 }
 
+function resolvePublicOrigin(env: NodeJS.ProcessEnv): string | undefined {
+  const configuredPublicOrigin = env.APP_ORIGIN?.trim();
+  const vercelHost = env.VERCEL_URL?.trim().replace(/^https?:\/\//, '');
+  const vercelProductionHost = env.VERCEL_PROJECT_PRODUCTION_URL?.trim().replace(
+    /^https?:\/\//,
+    '',
+  );
+
+  return (
+    configuredPublicOrigin ||
+    (env.VERCEL_ENV === 'production' && vercelProductionHost
+      ? `https://${vercelProductionHost}`
+      : vercelHost
+        ? `https://${vercelHost}`
+        : undefined)
+  );
+}
+
+function isHttpsOrigin(value: string): boolean {
+  try {
+    const parsedOrigin = new URL(value);
+    return (
+      parsedOrigin.protocol === 'https:' &&
+      parsedOrigin.pathname === '/' &&
+      !parsedOrigin.search &&
+      !parsedOrigin.hash
+    );
+  } catch {
+    return false;
+  }
+}
+
+function inspectHostVariable(
+  key: string,
+  value: string | undefined,
+): DiagnosticVariable {
+  if (!value?.trim()) {
+    return { key, status: 'optional' };
+  }
+
+  const rawHost = value.trim();
+  try {
+    const parsedHost = new URL(
+      /^[a-z][a-z\d+.-]*:\/\//i.test(rawHost) ? rawHost : `https://${rawHost}`,
+    );
+    if (
+      parsedHost.protocol !== 'https:' ||
+      parsedHost.pathname !== '/' ||
+      parsedHost.search ||
+      parsedHost.hash
+    ) {
+      return { key, status: 'invalid' };
+    }
+    return { key, status: 'valid', value: parsedHost.host };
+  } catch {
+    return { key, status: 'invalid' };
+  }
+}
+
+export function inspectEnvironment(
+  env: NodeJS.ProcessEnv = process.env,
+): DiagnosticVariable[] {
+  const publicOrigin = resolvePublicOrigin(env);
+  const explicitOrigin = env.APP_ORIGIN?.trim();
+  const productionHost = env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  const requiresStableOrigin =
+    env.NODE_ENV === 'production' && env.VERCEL_ENV === 'production';
+  const stableOriginMissing = requiresStableOrigin && !explicitOrigin && !productionHost;
+  const effectiveOriginStatus = !publicOrigin || stableOriginMissing
+    ? requiresStableOrigin
+      ? 'missing'
+      : 'optional'
+    : isHttpsOrigin(publicOrigin)
+      ? 'valid'
+      : 'invalid';
+
+  const explicitOriginCheck: DiagnosticVariable = !explicitOrigin
+    ? { key: 'APP_ORIGIN', status: 'optional' }
+    : isHttpsOrigin(explicitOrigin)
+      ? { key: 'APP_ORIGIN', status: 'valid', value: new URL(explicitOrigin).origin }
+      : { key: 'APP_ORIGIN', status: 'invalid' };
+  const effectiveOriginCheck: DiagnosticVariable = {
+    key: 'EFFECTIVE_PUBLIC_ORIGIN',
+    status: effectiveOriginStatus,
+    ...(effectiveOriginStatus === 'valid' && publicOrigin
+      ? { value: new URL(publicOrigin).origin }
+      : {}),
+  };
+
+  return [
+    {
+      key: 'NODE_ENV',
+      status: env.NODE_ENV ? 'valid' : 'optional',
+      ...(env.NODE_ENV ? { value: env.NODE_ENV } : {}),
+    },
+    {
+      key: 'VERCEL_ENV',
+      status:
+        env.VERCEL_ENV === undefined
+          ? 'optional'
+          : ['production', 'preview', 'development'].includes(env.VERCEL_ENV)
+            ? 'valid'
+            : 'invalid',
+      ...(env.VERCEL_ENV ? { value: env.VERCEL_ENV } : {}),
+    },
+    inspectHostVariable('VERCEL_URL', env.VERCEL_URL),
+    inspectHostVariable(
+      'VERCEL_PROJECT_PRODUCTION_URL',
+      env.VERCEL_PROJECT_PRODUCTION_URL,
+    ),
+    explicitOriginCheck,
+    effectiveOriginCheck,
+    {
+      key: 'GITHUB_OAUTH_CLIENT_ID',
+      status: env.GITHUB_OAUTH_CLIENT_ID?.trim() ? 'valid' : 'missing',
+    },
+    (() => {
+      const redisUrl = env.UPSTASH_REDIS_REST_URL?.trim();
+      if (!redisUrl) {
+        return { key: 'UPSTASH_REDIS_REST_URL', status: 'missing' };
+      }
+      try {
+        const parsedUrl = new URL(redisUrl);
+        return parsedUrl.protocol === 'https:'
+          ? {
+              key: 'UPSTASH_REDIS_REST_URL',
+              status: 'valid',
+              value: parsedUrl.host,
+            }
+          : { key: 'UPSTASH_REDIS_REST_URL', status: 'invalid' };
+      } catch {
+        return { key: 'UPSTASH_REDIS_REST_URL', status: 'invalid' };
+      }
+    })(),
+    {
+      key: 'UPSTASH_REDIS_REST_TOKEN',
+      status: env.UPSTASH_REDIS_REST_TOKEN?.trim() ? 'valid' : 'missing',
+    },
+    {
+      key: 'SESSION_ENCRYPTION_KEY',
+      status: !env.SESSION_ENCRYPTION_KEY?.trim()
+        ? 'missing'
+        : /^[\da-f]{64}$/i.test(env.SESSION_ENCRYPTION_KEY.trim())
+          ? 'valid'
+          : 'invalid',
+    },
+    {
+      key: 'DIAGNOSTICS_TOKEN',
+      status: env.DIAGNOSTICS_TOKEN?.trim() ? 'valid' : 'missing',
+    },
+  ];
+}
+
 export function parseConfig(
   env: NodeJS.ProcessEnv = process.env,
   cwd = process.cwd(),
@@ -34,18 +188,11 @@ export function parseConfig(
   const rawPort =
     env.PORT === undefined || env.PORT.trim() === '' ? undefined : Number(env.PORT);
   const configuredPublicOrigin = env.APP_ORIGIN?.trim();
-  const vercelHost = env.VERCEL_URL?.trim().replace(/^https?:\/\//, '');
   const vercelProductionHost = env.VERCEL_PROJECT_PRODUCTION_URL?.trim().replace(
     /^https?:\/\//,
     '',
   );
-  const rawPublicOrigin =
-    configuredPublicOrigin ||
-    (env.VERCEL_ENV === 'production' && vercelProductionHost
-      ? `https://${vercelProductionHost}`
-      : vercelHost
-        ? `https://${vercelHost}`
-        : undefined);
+  const rawPublicOrigin = resolvePublicOrigin(env);
   const redisRestUrl = env.UPSTASH_REDIS_REST_URL?.trim() || undefined;
   const redisRestToken = env.UPSTASH_REDIS_REST_TOKEN?.trim() || undefined;
   const sessionEncryptionKey = env.SESSION_ENCRYPTION_KEY?.trim() || undefined;
@@ -78,18 +225,7 @@ export function parseConfig(
   }
 
   if (rawPublicOrigin) {
-    let parsedOrigin: URL;
-    try {
-      parsedOrigin = new URL(rawPublicOrigin);
-    } catch {
-      throw new ConfigurationError('Configuration invalide : APP_ORIGIN doit être une origine HTTPS.');
-    }
-    if (
-      parsedOrigin.protocol !== 'https:' ||
-      parsedOrigin.pathname !== '/' ||
-      parsedOrigin.search ||
-      parsedOrigin.hash
-    ) {
+    if (!isHttpsOrigin(rawPublicOrigin)) {
       throw new ConfigurationError('Configuration invalide : APP_ORIGIN doit être une origine HTTPS.');
     }
   }
