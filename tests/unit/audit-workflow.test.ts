@@ -30,26 +30,26 @@ function result(documentType: AuditResult['documentType'], score: number): Audit
 }
 
 describe('audit workflow', () => {
-  it('keeps later steps locked until the previous score is greater than 90', () => {
-    const at90 = {
+  it('unlocks the next step at 85 and keeps it locked below 85', () => {
+    const at84 = {
       ...INITIAL_AUDIT_WORKFLOW_STATE,
       steps: {
         ...INITIAL_AUDIT_WORKFLOW_STATE.steps,
-        spec: { ...INITIAL_AUDIT_WORKFLOW_STATE.steps.spec, result: result('spec', 90) },
+        spec: { ...INITIAL_AUDIT_WORKFLOW_STATE.steps.spec, result: result('spec', 84) },
       },
     };
-    const at91 = {
-      ...at90,
+    const at85 = {
+      ...at84,
       steps: {
-        ...at90.steps,
-        spec: { ...at90.steps.spec, result: result('spec', 91) },
+        ...at84.steps,
+        spec: { ...at84.steps.spec, result: result('spec', 85) },
       },
     };
 
     expect(canEnterAuditStep(INITIAL_AUDIT_WORKFLOW_STATE, 'spec')).toBe(true);
-    expect(canEnterAuditStep(at90, 'plan')).toBe(false);
-    expect(canEnterAuditStep(at91, 'plan')).toBe(true);
-    expect(canEnterAuditStep(at91, 'tasks')).toBe(false);
+    expect(canEnterAuditStep(at84, 'plan')).toBe(false);
+    expect(canEnterAuditStep(at85, 'plan')).toBe(true);
+    expect(canEnterAuditStep(at85, 'tasks')).toBe(false);
   });
 
   it('unlocks tasks only after a passing plan result', () => {

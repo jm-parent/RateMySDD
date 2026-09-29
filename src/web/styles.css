@@ -1040,14 +1040,12 @@ button:disabled {
   overflow-x: auto;
 }
 
-.audit-table,
-.score-legend table {
+.audit-table {
   width: 100%;
   border-collapse: collapse;
 }
 
-.audit-table caption,
-.score-legend caption {
+.audit-table caption {
   border-bottom: 1px solid #dce4ee;
   padding: 0.5rem 0.25rem;
   color: #40536d;
@@ -1056,9 +1054,7 @@ button:disabled {
 }
 
 .audit-table th,
-.audit-table td,
-.score-legend th,
-.score-legend td {
+.audit-table td {
   border: 1px solid #dce4ee;
   padding: 0.65rem 0.7rem;
   vertical-align: top;
@@ -1071,8 +1067,7 @@ button:disabled {
   line-height: 1.4;
 }
 
-.audit-table thead,
-.score-legend thead {
+.audit-table thead {
   color: #24354c;
   background: #edf4fa;
 }
@@ -1200,19 +1195,27 @@ button:disabled {
   margin-top: 0.35rem;
 }
 
-.score-legend {
-  width: min(100%, 26rem);
+.analysis-metadata {
   margin-top: 1.25rem;
 }
 
-.score-legend summary {
-  width: fit-content;
-  cursor: pointer;
+.analysis-metadata dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+}
+
+.analysis-metadata dt {
+  color: #40536d;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
-.score-legend table {
-  margin-top: 0.75rem;
+.analysis-metadata dd {
+  margin: 0.25rem 0 0;
+  color: #172033;
+  font-size: 0.875rem;
 }
 
 @media (max-width: 760px) {

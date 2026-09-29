@@ -17,30 +17,30 @@ test('loads and audits one Markdown file', async ({ page }) => {
 
   await signIn(page);
   await page.getByLabel('Choisir un fichier .md').setInputFiles(
-    'tests/fixtures/specs/complete.md',
+    'tests/fixtures/specs/missing-nfr.md',
   );
   await expect(page.getByLabel('Spécification Markdown à auditer')).toContainText(
-    '# Gestion des abonnements',
+    '# Catalogue de livres',
   );
   await expect(page.locator('.loaded-file')).toHaveCount(0);
   await page.getByRole('button', { name: "Lancer l'audit" }).click();
 
   await expect(page.getByRole('row')).toHaveCount(7);
   await expect(page.getByRole('table').first()).toContainText(
-    'Résultat de l’audit : complete',
+    'Résultat de l’audit : missing-nfr',
   );
   await expect(page.getByLabel('Spécification Markdown à auditer')).toHaveCount(0);
 
   await page.getByRole('tab', { name: 'Mettre le MD' }).click();
   await expect(page.getByLabel('Spécification Markdown à auditer')).toContainText(
-    '# Gestion des abonnements',
+    '# Catalogue de livres',
   );
   await expect(page.locator('.loaded-file')).toHaveCount(0);
   expect(auditPayloads).toHaveLength(1);
   expect(auditPayloads[0]).toMatchObject({
     source: 'file',
-    fileName: 'complete.md',
-    content: expect.stringContaining('# Gestion des abonnements'),
+    fileName: 'missing-nfr.md',
+    content: expect.stringContaining('# Catalogue de livres'),
   });
 
   await page.getByRole('tab', { name: 'Le résultat' }).click();

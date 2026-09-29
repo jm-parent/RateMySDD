@@ -1,7 +1,7 @@
 import { Check, LockKeyhole } from 'lucide-react';
 import { AUDIT_DOCUMENT_TYPES } from '../../shared/audit-criteria.js';
 import type { AuditDocumentType } from '../../shared/audit-criteria.js';
-import { canEnterAuditStep } from '../audit-workflow.js';
+import { AUDIT_PASSING_SCORE, canEnterAuditStep } from '../audit-workflow.js';
 import type { AuditWorkflowState } from '../audit-workflow.js';
 
 const STEP_COPY: Record<AuditDocumentType, { label: string; description: string }> = {
@@ -29,7 +29,7 @@ export function AuditProgressHeader({
         {AUDIT_DOCUMENT_TYPES.map((documentType, index) => {
           const step = state.steps[documentType];
           const score = step.result?.globalScore ?? null;
-          const isComplete = score !== null && score > 90;
+          const isComplete = score !== null && score >= AUDIT_PASSING_SCORE;
           const isCurrent = state.activeStep === documentType;
           const isUnlocked = canEnterAuditStep(state, documentType);
           const status = isComplete

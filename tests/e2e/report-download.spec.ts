@@ -10,12 +10,12 @@ async function signIn(page: import('@playwright/test').Page) {
 
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
-test('copies and downloads the report, then replaces the result after re-audit', async ({
+test('copies and downloads the report, then advances after a passing re-audit', async ({
   page,
 }) => {
   await signIn(page);
   await page.getByLabel('Choisir un fichier .md').setInputFiles(
-    'tests/fixtures/specs/complete.md',
+    'tests/fixtures/specs/missing-nfr.md',
   );
   await page.getByRole('button', { name: "Lancer l'audit" }).click();
   await expect(page.getByRole('row')).toHaveCount(7);
@@ -24,7 +24,7 @@ test('copies and downloads the report, then replaces the result after re-audit',
   await page.getByRole('button', { name: 'Télécharger le rapport' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(
-    /^audit-complete-\d{8}-\d{4}\.md$/,
+    /^audit-missing-nfr-\d{8}-\d{4}\.md$/,
   );
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
@@ -32,10 +32,10 @@ test('copies and downloads the report, then replaces the result after re-audit',
   expect(report.match(/^\| 0[1-6] \|/gm)).toHaveLength(6);
   expect(report).toContain('## Barème');
   expect(report).toContain("**Date de l'audit**");
-  expect(report).toContain('**Source** : Fichier `complete.md`');
+  expect(report).toContain('**Source** : Fichier `missing-nfr.md`');
   expect(report).toContain('**Score global**');
   expect(report).not.toContain(
-    readFileSync('tests/fixtures/specs/complete.md', 'utf8').replace(/\r\n/g, '\n'),
+    readFileSync('tests/fixtures/specs/missing-nfr.md', 'utf8').replace(/\r\n/g, '\n'),
   );
 
   await page.getByRole('button', { name: 'Copier le résultat' }).click();
@@ -53,13 +53,13 @@ test('copies and downloads the report, then replaces the result after re-audit',
     .click({ timeout: 1_500 });
   await page
     .getByLabel('Spécification Markdown à auditer')
-    .fill("# Révision sans exigences d'exploitation");
+    .fill('# Révision avec exigences non fonctionnelles\n\nPerformance cible : 200 ms.');
   await page.getByRole('button', { name: "Lancer l'audit" }).click();
+  await expect(page.getByLabel('Plan Markdown à auditer')).toBeVisible();
+  await page.getByRole('button', { name: /spec\.md/ }).click();
+  await page.getByRole('tab', { name: 'Le résultat' }).click();
   await expect(page.getByRole('row')).toHaveCount(7);
-  await expect(page.getByRole('row').nth(6)).toContainText('0/100');
-  await expect(page.getByRole('table').first()).toContainText(
-    'Résultat de l’audit : complete',
-  );
+  await expect(page.getByRole('row').nth(6)).toContainText('87/100');
   const updatedScore = await page.getByRole('heading', { name: /Score global/ }).innerText();
   expect(updatedScore).not.toBe(initialScore);
 });

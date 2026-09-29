@@ -8,7 +8,6 @@ import { AuditPage, INITIAL_AUDIT_PAGE_STATE } from '../../src/web/components/Au
 import { AuditResultTable } from '../../src/web/components/AuditResultTable.js';
 import { DocumentInput } from '../../src/web/components/DocumentInput.js';
 import { PrivacyNotice } from '../../src/web/components/PrivacyNotice.js';
-import { ScoreLegend } from '../../src/web/components/ScoreLegend.js';
 import { AuditProgressHeader } from '../../src/web/components/AuditProgressHeader.js';
 import { INITIAL_AUDIT_WORKFLOW_STATE } from '../../src/web/audit-workflow.js';
 
@@ -39,7 +38,7 @@ describe('audit interface components', () => {
       activeStep: 'plan' as const,
       steps: {
         ...INITIAL_AUDIT_WORKFLOW_STATE.steps,
-        spec: { ...INITIAL_AUDIT_WORKFLOW_STATE.steps.spec, result: { ...result, globalScore: 94 } },
+        spec: { ...INITIAL_AUDIT_WORKFLOW_STATE.steps.spec, result: { ...result, globalScore: 85 } },
       },
     };
     const html = renderToStaticMarkup(
@@ -47,7 +46,8 @@ describe('audit interface components', () => {
     );
 
     expect(html).toContain('aria-label="Progression des audits"');
-    expect(html).toContain('94%');
+    expect(html).toContain('85%');
+    expect(html).toContain('Validé');
     expect(html).toContain('aria-current="step"');
     expect(html).toContain('En cours');
     expect(html).toContain('Verrouillé');
@@ -124,16 +124,6 @@ describe('audit interface components', () => {
     expect(html).toContain('Effacer');
   });
 
-  it('renders the score legend with the documented score bands', () => {
-    const html = renderToStaticMarkup(createElement(ScoreLegend));
-
-    expect(html).toContain('<details class="score-legend">');
-    expect(html).toContain('Barème de notation');
-    expect(html).toContain('0–0');
-    expect(html).toContain('90–100');
-    expect(html).toContain('excellent');
-  });
-
   it('renders all six criteria and escaped text in the audit result table', () => {
     const html = renderToStaticMarkup(createElement(AuditResultTable, { result }));
 
@@ -198,7 +188,11 @@ describe('audit interface components', () => {
     expect(html).toContain('<h2 id="audit-result-screen-title"');
     expect(html).toContain('Résultat de l’audit');
     expect(html).toContain('Score global : 80/100 — bon');
-    expect(html).toContain('Barème de notation');
+    expect(html).toContain('Date de l’analyse');
+    expect(html).toContain('Modèle utilisé');
+    expect(html).toContain('test-model');
+    expect(html).toMatch(/<time[^>]*datetime="2026-09-24T14:05:00.000Z"[^>]*>/i);
+    expect(html).not.toContain('Barème de notation');
     expect(html).toContain('Copier le résultat');
     expect(html).toContain('Télécharger le rapport');
     expect(rows).toHaveLength(6);

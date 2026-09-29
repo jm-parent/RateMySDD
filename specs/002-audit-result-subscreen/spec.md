@@ -53,9 +53,10 @@ puis revenir à la saisie et vérifier que le document est inchangé.
    se termine avec un résultat conforme, **Then** l'application affiche un sous-écran de
    résultat distinct et masque l'écran de saisie.
 2. **Given** le sous-écran de résultat, **When** l'utilisateur consulte l'audit, **Then** le
-   score global et le tableau complet des six piliers restent visibles dans leur ordre
-   canonique, avec les notes, descriptions et points d'amélioration ; le barème et les actions
-   de copie et de téléchargement restent accessibles.
+  score global, la date de l'analyse, le modèle utilisé et le tableau complet des six piliers
+  restent visibles dans leur ordre canonique, avec les notes, descriptions et points
+  d'amélioration ; les actions de copie et de téléchargement restent accessibles et le barème
+  de notation n'est pas affiché.
 3. **Given** la carte d'audit avec la barre d'onglets, **When** l'utilisateur sélectionne l'onglet « Mettre le MD », **Then** le panneau de saisie réapparaît avec le même texte, la même source et, le cas échéant, le même nom de fichier, sans lancer un nouvel audit.
 4. **Given** un document dont le résultat précédent est consultable, **When** l'utilisateur
    modifie le document, **Then** le résultat précédent est retiré et ne peut pas être présenté
@@ -68,6 +69,9 @@ puis revenir à la saisie et vérifier que le document est inchangé.
 7. **Given** une session expirée ou déconnectée, **When** une personne non authentifiée tente
    d'accéder à l'un des écrans, **Then** le document et le résultat ne sont pas consultables
    avant une authentification valide.
+8. **Given** un résultat d'audit global, **When** le score est d'au moins 85, **Then** l'étape
+  suivante est déverrouillée et sélectionnée automatiquement ; sous 85, l'utilisateur reste
+  sur l'étape courante et l'étape suivante demeure verrouillée.
 
 ### Edge Cases
 
@@ -98,8 +102,9 @@ puis revenir à la saisie et vérifier que le document est inchangé.
   résultat dans un écran dédié, distinct de l'écran de saisie.
 - **FR-002**: Sur l'écran de résultat, le système MUST afficher le score global et le tableau
   complet conforme au format existant : exactement les six piliers dans l'ordre prévu, chacun
-  avec sa note, sa description et ses points d'amélioration. Le barème, la copie Markdown et
-  le téléchargement du rapport MUST rester disponibles.
+  avec sa note, sa description et ses points d'amélioration, ainsi que la date de l'analyse et
+  le modèle utilisé. Le barème MUST NOT être affiché ; la copie Markdown et le téléchargement
+  du rapport MUST rester disponibles.
 - **FR-003**: L'écran de saisie MUST être masqué pendant la consultation du résultat ; le
   tableau MUST NOT être simplement ajouté sous le formulaire sur ce même écran.
 - **FR-004**: L'espace d'audit MUST afficher en permanence un onglet « Mettre le MD » et un onglet « Le résultat » au-dessus du panneau actif, dans la même carte. L'onglet de résultat MUST rester visible mais MUST être désactivé s'il n'existe pas de résultat valide pour le document courant ou si un audit est en cours.
@@ -153,6 +158,8 @@ puis revenir à la saisie et vérifier que le document est inchangé.
   uniquement depuis la mémoire courante ; une identité différente, une déconnexion explicite,
   un rechargement de page ou la fermeture de l'application MUST effacer la saisie et le
   résultat.
+- **FR-021**: Un score global d'au moins 85 MUST valider l'étape d'audit et déverrouiller
+  l'étape suivante ; un score inférieur à 85 MUST laisser l'étape suivante verrouillée.
 
 ### Formats des données et échanges
 

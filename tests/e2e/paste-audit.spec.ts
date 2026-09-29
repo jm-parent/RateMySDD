@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { AUDIT_CRITERIA } from '../../src/shared/audit-criteria.js';
 
 function fixture(name: string): string {
   return readFileSync(
@@ -27,9 +28,9 @@ function auditResultFor(request: AuditRequestBody, score: number) {
     fileName: request.fileName ?? null,
     globalScore: score,
     globalBand: band,
-    evaluations: ['01', '02', '03', '04', '05', '06'].map((criterionId) => ({
+    evaluations: AUDIT_CRITERIA[request.documentType].map(({ id: criterionId, title }) => ({
       criterionId,
-      title: `Critère ${criterionId}`,
+      title,
       score,
       band,
       summary: ['Critère évalué.'],
@@ -192,6 +193,10 @@ test('enforces the 200 KiB limit before sending pasted content', async ({ page }
 
 test('audits pasted Markdown and renders six ordered criterion rows', async ({ page }) => {
   const auditRequests: string[] = [];
+  await page.route('**/api/audits', async (route) => {
+    const request = JSON.parse(route.request().postData() ?? '{}') as AuditRequestBody;
+    await route.fulfill({ json: auditResultFor(request, 84) });
+  });
   page.on('request', (request) => {
     if (request.url().endsWith('/api/audits')) {
       auditRequests.push(request.postData() ?? '');
@@ -209,6 +214,10 @@ test('audits pasted Markdown and renders six ordered criterion rows', async ({ p
   await expect(resultTab).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByLabel('Spécification Markdown à auditer')).toHaveCount(0);
   await expect(page.getByRole('row')).toHaveCount(7);
+  await expect(page.getByText('Date de l’analyse')).toBeVisible();
+  await expect(page.getByText('Modèle utilisé')).toBeVisible();
+  await expect(page.getByText('test-model')).toBeVisible();
+  await expect(page.getByText('Barème de notation')).toHaveCount(0);
   await expect(page.getByRole('row').nth(1)).toContainText('Contexte & Objectif');
   await expect(page.getByRole('row').nth(6)).toContainText('Exigences Non Fonctionnelles');
   await expect(page.getByText('Moyenne des six critères')).toBeVisible();
@@ -229,7 +238,7 @@ test('audits pasted Markdown and renders six ordered criterion rows', async ({ p
   expect(auditRequests).toHaveLength(1);
 });
 
-test('requires more than 90 for each step and sends its immediate reference', async ({
+test('requires at least 85 for each step and sends its immediate reference', async ({
   page,
 }) => {
   const requests: AuditRequestBody[] = [];
@@ -242,11 +251,11 @@ test('requires more than 90 for each step and sends its immediate reference', as
     requests.push(request);
     const score =
       request.documentType === 'spec'
-        ? (++specAudits === 1 ? 90 : 91)
+        ? (++specAudits === 1 ? 84 : 85)
         : request.documentType === 'plan'
           ? ++planAudits === 1
-            ? 90
-            : 91
+            ? 84
+            : 85
           : ++tasksAudits > 0
             ? 92
             : 91;
@@ -257,7 +266,7 @@ test('requires more than 90 for each step and sends its immediate reference', as
   const specInput = page.getByLabel('Spécification Markdown à auditer');
   await specInput.fill('# Spec initiale');
   await page.getByRole('button', { name: "Lancer l'audit" }).click();
-  await expect(page.getByText('Score global : 90/100 — excellent')).toBeVisible();
+  await expect(page.getByText('Score global : 84/100 — bon')).toBeVisible();
   await expect(page.getByRole('button', { name: /plan\.md/ })).toBeDisabled();
 
   await page.getByRole('tab', { name: 'Mettre le MD' }).click();
@@ -270,7 +279,7 @@ test('requires more than 90 for each step and sends its immediate reference', as
 
   await planInput.fill('# Plan à reprendre');
   await page.getByRole('button', { name: "Lancer l'audit" }).click();
-  await expect(page.getByText('Score global : 90/100 — excellent')).toBeVisible();
+  await expect(page.getByText('Score global : 84/100 — bon')).toBeVisible();
   await expect(page.getByRole('button', { name: /tasks\.md/ })).toBeDisabled();
 
   await page.getByRole('tab', { name: 'Mettre le MD' }).click();
@@ -360,7 +369,8 @@ test('disables the audit button while the request is in progress', async ({ page
   await page.route('**/api/audits', async (route) => {
     signalRequestStarted();
     await requestPaused;
-    await route.continue();
+    const request = JSON.parse(route.request().postData() ?? '{}') as AuditRequestBody;
+    await route.fulfill({ json: auditResultFor(request, 84) });
   });
 
   await signIn(page);
@@ -392,7 +402,8 @@ test('keeps prior result available after a failed retry', async ({ page }) => {
   await page.route('**/api/audits', async (route) => {
     auditCount += 1;
     if (auditCount === 1) {
-      await route.continue();
+      const request = JSON.parse(route.request().postData() ?? '{}') as AuditRequestBody;
+      await route.fulfill({ json: auditResultFor(request, 84) });
       return;
     }
 
@@ -463,7 +474,8 @@ test('preserves the draft when an audit request expires the session', async ({ p
       });
       return;
     }
-    await route.continue();
+    const request = JSON.parse(route.request().postData() ?? '{}') as AuditRequestBody;
+    await route.fulfill({ json: auditResultFor(request, 84) });
   });
 
   await signIn(page);

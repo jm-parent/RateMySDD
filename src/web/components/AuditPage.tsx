@@ -5,6 +5,7 @@ import { MAX_CONTENT_BYTES, AuditResultSchema } from '../../shared/schemas.js';
 import type { AuditDocumentType } from '../../shared/audit-criteria.js';
 import type { AuditResult } from '../../shared/schemas.js';
 import {
+  AUDIT_PASSING_SCORE,
   canEnterAuditStep,
   INITIAL_AUDIT_WORKFLOW_STATE,
   invalidateAuditStepAndFollowing,
@@ -155,7 +156,7 @@ export function AuditPage({ state, onStateChange }: AuditPageProps) {
           : state.activeStep === 'plan'
             ? 'tasks'
             : null;
-      const advance = result.globalScore > 90 && nextStep !== null;
+      const advance = result.globalScore >= AUDIT_PASSING_SCORE && nextStep !== null;
       setFocusNewResult(!advance);
       onStateChange({
         ...state,

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import type { AuditResult } from '../../shared/schemas.js';
-import { ScoreLegend } from './ScoreLegend.js';
+
+const ANALYSIS_DATE_FORMATTER = new Intl.DateTimeFormat('fr-FR', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
 
 interface AuditResultTableProps {
   result: AuditResult;
@@ -79,7 +83,22 @@ export function AuditResultTable({ result }: AuditResultTableProps) {
           </tbody>
         </table>
       </div>
-      <ScoreLegend />
+      <section className="analysis-metadata" aria-label="Informations sur l’analyse">
+        <dl>
+          <div>
+            <dt>Date de l’analyse</dt>
+            <dd>
+              <time dateTime={result.auditedAt}>
+                {ANALYSIS_DATE_FORMATTER.format(new Date(result.auditedAt))}
+              </time>
+            </dd>
+          </div>
+          <div>
+            <dt>Modèle utilisé</dt>
+            <dd>{result.model}</dd>
+          </div>
+        </dl>
+      </section>
       <dialog
         ref={descriptionDialogRef}
         className="description-dialog"

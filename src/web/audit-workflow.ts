@@ -41,6 +41,8 @@ export const INITIAL_AUDIT_WORKFLOW_STATE: AuditWorkflowState = {
   },
 };
 
+export const AUDIT_PASSING_SCORE = 85;
+
 const STEP_ORDER: readonly AuditDocumentType[] = ['spec', 'plan', 'tasks'];
 
 export function canEnterAuditStep(
@@ -54,7 +56,7 @@ export function canEnterAuditStep(
 
   const previousStep = STEP_ORDER[stepIndex - 1];
   const previousResult = previousStep ? state.steps[previousStep].result : null;
-  return previousResult !== null && previousResult.globalScore > 90;
+  return previousResult !== null && previousResult.globalScore >= AUDIT_PASSING_SCORE;
 }
 
 export function invalidateAuditStepAndFollowing(

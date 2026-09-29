@@ -109,7 +109,7 @@ test('keeps the result table readable at 1280px with accessible score colors', a
 
   await page
     .getByLabel('Spécification Markdown à auditer')
-    .fill('# Audit test\n\nExigences non fonctionnelles : disponibilité 99,9 %.');
+    .fill('# Audit test\n\nLa disponibilité cible est de 99,9 %.');
   await page.getByRole('button', { name: "Lancer l'audit" }).click();
   await expect(page.getByRole('row')).toHaveCount(7);
   const tableFontSizes = await page
