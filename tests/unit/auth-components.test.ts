@@ -17,8 +17,9 @@ describe('authentication components', () => {
     const html = renderToStaticMarkup(
       createElement(LoginScreen, { onAuthenticated: () => undefined }),
     );
-    expect(html).toContain('RateMySDD — Audit de spécifications');
-    expect(html).toContain('Se connecter avec GitHub Copilot');
+    expect(html).toContain('Auditez vos spécifications avant');
+    expect(html).toContain('RateMySDD');
+    expect(html).toContain('Connexion à votre espace');
     expect(html).toContain('Se connecter avec GitHub Copilot');
     expect(html).toContain('Diagnostic administrateur');
     expect(html).toContain('aria-expanded="false"');

@@ -1,4 +1,4 @@
-import { Bug } from 'lucide-react';
+import { Bug, Check, CircleCheck, Lock, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
@@ -207,27 +207,190 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
 
   return (
     <main className="auth-screen">
-      <section className="auth-panel" aria-labelledby="login-title">
-        <h1 id="login-title">RateMySDD — Audit de spécifications</h1>
-        <p>
-          Connectez-vous avec GitHub pour utiliser votre compte Copilot lors de
-          l’analyse.
+      <section className="auth-hero" aria-labelledby="login-title">
+        <p className="auth-badge">
+          <span aria-hidden="true" />
+          Méthodologie Spec-Driven Development (SDD)
+        </p>
+        <h1 id="login-title">
+          Auditez vos spécifications avant d’écrire la moindre ligne de code.
+        </h1>
+        <p className="auth-lead">
+          RateMySDD valide automatiquement la clarté technique, la testabilité et
+          l’exhaustivité de vos documents de cadrage grâce à l’intelligence
+          contextuelle de Copilot.
         </p>
 
-        {!device && (
-          <button
-            type="button"
-            className="button-primary"
-            onClick={() => void beginLogin()}
-            disabled={status === 'starting'}
-          >
-            {status === 'starting'
-              ? 'Connexion à GitHub…'
-              : 'Se connecter avec GitHub Copilot'}
-          </button>
-        )}
+        <div className="auth-preview" aria-hidden="true">
+          <div className="auth-preview-bar">
+            <span className="auth-preview-dots">
+              <i />
+              <i />
+              <i />
+            </span>
+            <code>sdd-audit-pipeline.v2</code>
+            <span className="auth-preview-tag">
+              <ShieldCheck size={12} />
+              Garanti zéro rétention
+            </span>
+          </div>
+          <div className="auth-preview-steps">
+            <div>
+              <small>Étape 1</small>
+              <code>spec.md</code>
+            </div>
+            <div className="is-active">
+              <small>Étape 2</small>
+              <code>plan.md</code>
+            </div>
+            <div>
+              <small>Étape 3</small>
+              <code>tasks.md</code>
+            </div>
+          </div>
+          <div className="auth-preview-score">
+            <div>
+              <p>
+                <strong>96</strong>
+                <span>/100</span>
+                <em>Conforme</em>
+              </p>
+              <small>Couverture validée &amp; cas limites blindés</small>
+            </div>
+            <CircleCheck size={40} strokeWidth={1.5} />
+          </div>
+        </div>
 
-        <div className="diagnostics-entry">
+        <ul className="auth-benefits">
+          <li>
+            <Check aria-hidden="true" size={12} />
+            <span>
+              <strong>Détection proactive</strong> des angles morts et failles
+              d’architecture
+            </span>
+          </li>
+          <li>
+            <Check aria-hidden="true" size={12} />
+            <span>
+              <strong>Alignement strict</strong> entre exigences métier, specs et
+              plan d’exécution
+            </span>
+          </li>
+          <li>
+            <Check aria-hidden="true" size={12} />
+            <span>
+              <strong>Intégration transparente</strong> et instantanée avec
+              GitHub Copilot
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <section className="auth-panel" aria-labelledby="login-panel-title">
+        <div className="auth-brand">
+          <span className="brand-mark" aria-hidden="true">
+            R
+          </span>
+          <span className="brand-name">RateMySDD</span>
+        </div>
+
+        <div className="auth-body">
+          <h2 id="login-panel-title">Connexion à votre espace</h2>
+          <p className="auth-body-lead">
+            Connectez-vous avec votre compte GitHub pour autoriser l’analyse
+            sécurisée via Copilot.
+          </p>
+
+          {!device && (
+            <button
+              type="button"
+              className="button-primary auth-github-button"
+              onClick={() => void beginLogin()}
+              disabled={status === 'starting'}
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+              >
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
+              </svg>
+              {status === 'starting'
+                ? 'Connexion à GitHub…'
+                : 'Se connecter avec GitHub Copilot'}
+            </button>
+          )}
+
+          {device && status === 'pending' && (
+            <div className="device-instructions">
+              <p>Ouvrez GitHub et saisissez ce code :</p>
+              <p className="device-code" aria-label="Code de connexion">
+                {device.userCode}
+              </p>
+              <button type="button" onClick={() => void copyUserCode()}>
+                Copier le code
+              </button>
+              <p
+                className="copy-status-announcement"
+                role="status"
+                aria-live="polite"
+              >
+                {copyStatus}
+              </p>
+              {copyStatus && (
+                <div
+                  className={`copy-toast${
+                    copyStatus === 'Code copié.' ? '' : ' copy-toast--error'
+                  }${copyStatusFading ? ' copy-toast--fading' : ''}`}
+                  aria-hidden="true"
+                >
+                  {copyStatus}
+                </div>
+              )}
+              <a
+                href={device.verificationUri}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Ouvrir github.com/login/device
+              </a>
+              <p aria-live="polite">En attente de votre autorisation…</p>
+            </div>
+          )}
+
+          {(status === 'denied' || status === 'expired' || (error && device)) && (
+            <div className="login-error" role="alert">
+              {error ??
+                (status === 'denied' ? 'Connexion refusée.' : 'Code expiré.')}
+            </div>
+          )}
+
+          {(status === 'denied' || status === 'expired' || error) && (
+            <button
+              type="button"
+              className="button-primary"
+              onClick={() => void beginLogin()}
+              disabled={status === 'starting'}
+            >
+              Recommencer
+            </button>
+          )}
+
+          <p className="auth-privacy">
+            <strong>Abonnement &amp; Confidentialité :</strong>
+            Utilise votre abonnement Copilot existant sans surcoût. Vos fichiers
+            ne quittent jamais votre périmètre.
+          </p>
+          <p className="auth-secure">
+            <Lock aria-hidden="true" size={12} />
+            Authentification OAuth chiffrée bout-en-bout
+          </p>
+        </div>
+
+        <footer className="diagnostics-entry">
           <button
             type="button"
             className="diagnostics-toggle"
@@ -325,62 +488,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
               )}
             </section>
           )}
-        </div>
-
-        {device && status === 'pending' && (
-          <div className="device-instructions">
-            <p>Ouvrez GitHub et saisissez ce code :</p>
-            <p className="device-code" aria-label="Code de connexion">
-              {device.userCode}
-            </p>
-            <button type="button" onClick={() => void copyUserCode()}>
-              Copier le code
-            </button>
-            <p
-              className="copy-status-announcement"
-              role="status"
-              aria-live="polite"
-            >
-              {copyStatus}
-            </p>
-            {copyStatus && (
-              <div
-                className={`copy-toast${
-                  copyStatus === 'Code copié.' ? '' : ' copy-toast--error'
-                }${copyStatusFading ? ' copy-toast--fading' : ''}`}
-                aria-hidden="true"
-              >
-                {copyStatus}
-              </div>
-            )}
-            <a
-              href={device.verificationUri}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Ouvrir github.com/login/device
-            </a>
-            <p aria-live="polite">En attente de votre autorisation…</p>
-          </div>
-        )}
-
-        {(status === 'denied' || status === 'expired' || (error && device)) && (
-          <div className="login-error" role="alert">
-            {error ??
-              (status === 'denied' ? 'Connexion refusée.' : 'Code expiré.')}
-          </div>
-        )}
-
-        {(status === 'denied' || status === 'expired' || error) && (
-          <button
-            type="button"
-            className="button-primary"
-            onClick={() => void beginLogin()}
-            disabled={status === 'starting'}
-          >
-            Recommencer
-          </button>
-        )}
+        </footer>
       </section>
     </main>
   );
