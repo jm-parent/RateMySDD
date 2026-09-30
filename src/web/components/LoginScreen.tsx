@@ -1,7 +1,6 @@
 import {
   Bug,
   Check,
-  CircleCheck,
   Copy,
   ExternalLink,
   Lock,
@@ -21,6 +20,7 @@ import type {
   User,
 } from '../../shared/schemas.js';
 import { ApiClientError, apiGetDiagnostics, apiPost } from '../api.js';
+import { AuthPreview } from './AuthPreview.js';
 
 type LoginStatus = 'idle' | 'starting' | 'pending' | 'denied' | 'expired';
 
@@ -247,45 +247,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
           contextuelle de Copilot.
         </p>
 
-        <div className="auth-preview" aria-hidden="true">
-          <div className="auth-preview-bar">
-            <span className="auth-preview-dots">
-              <i />
-              <i />
-              <i />
-            </span>
-            <code>sdd-audit-pipeline.v2</code>
-            <span className="auth-preview-tag">
-              <ShieldCheck size={12} />
-              Garanti zéro rétention
-            </span>
-          </div>
-          <div className="auth-preview-steps">
-            <div>
-              <small>Étape 1</small>
-              <code>spec.md</code>
-            </div>
-            <div className="is-active">
-              <small>Étape 2</small>
-              <code>plan.md</code>
-            </div>
-            <div>
-              <small>Étape 3</small>
-              <code>tasks.md</code>
-            </div>
-          </div>
-          <div className="auth-preview-score">
-            <div>
-              <p>
-                <strong>96</strong>
-                <span>/100</span>
-                <em>Conforme</em>
-              </p>
-              <small>Couverture validée &amp; cas limites blindés</small>
-            </div>
-            <CircleCheck size={40} strokeWidth={1.5} />
-          </div>
-        </div>
+        <AuthPreview />
 
         <ul className="auth-benefits">
           <li>

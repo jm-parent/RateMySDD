@@ -242,6 +242,86 @@ button:disabled {
   color: #34d399;
 }
 
+.auth-preview-steps > div {
+  transition: border-color 0.3s, background 0.3s;
+}
+
+.auth-preview-steps .is-done {
+  border-color: #bfe8d0;
+  background: #eaf8f0;
+}
+
+.auth-preview-steps .is-done small,
+.auth-preview-steps .is-done code {
+  color: #126534;
+}
+
+.auth-preview-steps .is-done code::after {
+  content: ' ✓';
+}
+
+.auth-preview-score.is-run strong,
+.auth-preview-score.is-run > svg,
+.auth-preview-score.is-run em {
+  color: #60a5fa;
+}
+
+.auth-preview-score.is-run em {
+  background: #16283f;
+}
+
+.auth-preview-score.is-warn strong,
+.auth-preview-score.is-warn > svg,
+.auth-preview-score.is-warn em {
+  color: #fbbf24;
+}
+
+.auth-preview-score.is-warn em {
+  background: #3a2c10;
+}
+
+.auth-preview-score strong {
+  min-width: 2.2ch;
+  font-variant-numeric: tabular-nums;
+}
+
+.auth-preview-score.is-run > svg {
+  animation: auth-preview-spin 1.2s linear infinite;
+}
+
+.auth-preview-score.is-warn > svg {
+  animation: auth-preview-pulse 0.6s ease-in-out 2;
+}
+
+.auth-preview-score.is-ok > svg {
+  animation: auth-preview-pop 0.4s ease-out;
+}
+
+@keyframes auth-preview-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes auth-preview-pulse {
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+@keyframes auth-preview-pop {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-preview-score > svg {
+    animation: none !important;
+  }
+}
+
 .auth-benefits {
   display: grid;
   gap: 0.6rem;
