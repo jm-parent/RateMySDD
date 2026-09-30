@@ -81,7 +81,7 @@ button:disabled {
 }
 
 .auth-hero h1 {
-  margin: 0;
+  margin: 0 auto;
   color: #0f172a;
   font-size: clamp(2rem, 3.4vw, 2.6rem);
   line-height: 1.08;
@@ -280,7 +280,7 @@ button:disabled {
 .auth-panel > * {
   width: min(100%, 22rem);
   margin-right: auto;
-  margin-left: 0;
+  margin-left: auto;
 }
 
 .auth-brand {
