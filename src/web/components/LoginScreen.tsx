@@ -1,4 +1,12 @@
-import { Bug, Check, CircleCheck, Lock, ShieldCheck } from 'lucide-react';
+import {
+  Bug,
+  Check,
+  CircleCheck,
+  Copy,
+  ExternalLink,
+  Lock,
+  ShieldCheck,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
@@ -31,6 +39,12 @@ const RUNTIME_STATUS_LABELS: Record<DiagnosticSnapshot['runtime'], string> = {
   failed: 'Échec',
 };
 
+function formatCountdown(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  return `${minutes}:${seconds}`;
+}
+
 interface LoginScreenProps {
   onAuthenticated: (user: User) => void;
 }
@@ -39,6 +53,8 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
   const [device, setDevice] = useState<DeviceStart>();
   const [pollInterval, setPollInterval] = useState(5);
   const [pollVersion, setPollVersion] = useState(0);
+  const [expiresAt, setExpiresAt] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const [status, setStatus] = useState<LoginStatus>('idle');
   const [error, setError] = useState<string>();
   const [copyStatus, setCopyStatus] = useState('');
@@ -80,6 +96,8 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
       );
       setDevice(authorization);
       setPollInterval(authorization.interval);
+      setNow(Date.now());
+      setExpiresAt(Date.now() + authorization.expiresIn * 1_000);
       setStatus('pending');
     } catch (cause) {
       setStatus('idle');
@@ -136,6 +154,14 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
       window.clearTimeout(timeout);
     };
   }, [device, onAuthenticated, pollInterval, pollVersion, status]);
+
+  useEffect(() => {
+    if (status !== 'pending') {
+      return;
+    }
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [status]);
 
   useEffect(() => {
     return () => {
@@ -297,8 +323,9 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
         <div className="auth-body">
           <h2 id="login-panel-title">Connexion à votre espace</h2>
           <p className="auth-body-lead">
-            Connectez-vous avec votre compte GitHub pour autoriser l’analyse
-            sécurisée via Copilot.
+            {device && status === 'pending'
+              ? 'Authentification via votre compte GitHub pour activer l’analyse contextuelle sécurisée Copilot.'
+              : 'Connectez-vous avec votre compte GitHub pour autoriser l’analyse sécurisée via Copilot.'}
           </p>
 
           {!device && (
@@ -326,13 +353,27 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
 
           {device && status === 'pending' && (
             <div className="device-instructions">
-              <p>Ouvrez GitHub et saisissez ce code :</p>
-              <p className="device-code" aria-label="Code de connexion">
-                {device.userCode}
-              </p>
-              <button type="button" onClick={() => void copyUserCode()}>
-                Copier le code
-              </button>
+              <div className="device-card-header">
+                <span>Code d’autorisation temporaire</span>
+                <span className="device-expiry">
+                  Expire dans{' '}
+                  {formatCountdown(Math.max(0, Math.ceil((expiresAt - now) / 1_000)))}
+                </span>
+              </div>
+              <div className="device-code-row">
+                <p className="device-code" aria-label="Code de connexion">
+                  {device.userCode}
+                </p>
+                <button
+                  type="button"
+                  className="device-copy-button"
+                  aria-label="Copier le code"
+                  onClick={() => void copyUserCode()}
+                >
+                  <Copy aria-hidden="true" size={14} />
+                  Copier
+                </button>
+              </div>
               <p
                 className="copy-status-announcement"
                 role="status"
@@ -351,13 +392,18 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
                 </div>
               )}
               <a
+                className="device-open-link"
                 href={device.verificationUri}
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 Ouvrir github.com/login/device
+                <ExternalLink aria-hidden="true" size={14} />
               </a>
-              <p aria-live="polite">En attente de votre autorisation…</p>
+              <p className="device-waiting" aria-live="polite">
+                <span aria-hidden="true" />
+                En attente de votre autorisation dans le navigateur…
+              </p>
             </div>
           )}
 
@@ -379,15 +425,40 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
             </button>
           )}
 
-          <p className="auth-privacy">
-            <strong>Abonnement &amp; Confidentialité :</strong>
-            Utilise votre abonnement Copilot existant sans surcoût. Vos fichiers
-            ne quittent jamais votre périmètre.
-          </p>
-          <p className="auth-secure">
-            <Lock aria-hidden="true" size={12} />
-            Authentification OAuth chiffrée bout-en-bout
-          </p>
+          {device && status === 'pending' ? (
+            <div className="auth-privacy auth-privacy--list">
+              <strong>
+                <ShieldCheck aria-hidden="true" size={14} />
+                Sécurité &amp; Transparence des données
+              </strong>
+              <ul>
+                <li>
+                  <b>Licence Copilot existante :</b> utilise votre quota GitHub
+                  habituel sans surcoût.
+                </li>
+                <li>
+                  <b>Zéro persistance :</b> vos fichiers et spécifications ne
+                  sont jamais stockés ni réutilisés.
+                </li>
+                <li>
+                  <b>Chiffrement de bout en bout :</b> flux sécurisé par jetons
+                  OAuth restreints et connexion chiffrée.
+                </li>
+              </ul>
+            </div>
+          ) : (
+            <>
+              <p className="auth-privacy">
+                <strong>Abonnement &amp; Confidentialité :</strong>
+                Utilise votre abonnement Copilot existant sans surcoût. Vos
+                fichiers ne quittent jamais votre périmètre.
+              </p>
+              <p className="auth-secure">
+                <Lock aria-hidden="true" size={12} />
+                Authentification OAuth chiffrée bout-en-bout
+              </p>
+            </>
+          )}
         </div>
 
         <footer className="diagnostics-entry">

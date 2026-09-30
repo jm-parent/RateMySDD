@@ -412,17 +412,144 @@ button:disabled {
 .device-instructions {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 0.75rem;
-  margin-top: 1.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1rem;
+  background: #fff;
+  box-shadow: 0 4px 16px rgb(20 45 80 / 6%);
+}
+
+.device-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.device-expiry {
+  color: #94a3b8;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+.device-code-row {
+  display: flex;
+  gap: 0.6rem;
 }
 
 .device-code {
+  flex: 1;
+  min-width: 0;
   margin: 0;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 0.7rem 0.5rem;
+  color: #0f172a;
+  background: #f8fafc;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 2rem;
+  font-size: 1.35rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.2em;
+  text-align: center;
+  user-select: all;
+}
+
+.device-copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-color: #cbd5e1;
+  border-radius: 10px;
+  padding: 0 0.9rem;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.auth-panel .device-open-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  color: #fff;
+  background: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-panel .device-open-link:hover {
+  background: #1e293b;
+}
+
+.device-waiting {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  border: 1px solid #dbe8f7;
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  color: #0b4a86;
+  background: #eef6fd;
+  font-size: 0.72rem;
+}
+
+.device-waiting > span {
+  flex: 0 0 auto;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: #0b84d0;
+  animation: device-waiting-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes device-waiting-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-waiting > span {
+    animation: none;
+  }
+}
+
+.auth-privacy--list {
+  gap: 0.6rem;
+  padding: 1rem;
+  text-align: left;
+}
+
+.auth-privacy--list strong {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #0f172a;
+  font-size: 0.78rem;
+}
+
+.auth-privacy--list strong > svg {
+  color: #12805a;
+}
+
+.auth-privacy--list ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.auth-privacy--list b {
+  color: #1e293b;
 }
 
 .copy-status-announcement {
